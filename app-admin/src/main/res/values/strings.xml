@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">إدارة الطيبين</string>
+    <string name="admin_header_title">مدينة الطيبين — الإدارة</string>
+    <string name="admin_local_mode_banner">بيانات تجريبية محلية • التعديلات لا تُزامن مع الخادم بعد</string>
+    <string name="tab_dashboard">لوحة التحكم</string>
+    <string name="tab_houses">البيوت</string>
+    <string name="tab_plots">الأراضي</string>
+    <string name="tab_map">الخريطة</string>
+    <string name="stat_houses_label">إجمالي البيوت</string>
+    <string name="stat_available_plots_label">أراضٍ متاحة</string>
+    <string name="stat_occupied_plots_label">أراضٍ مشغولة</string>
+    <string name="stat_residents_label">السكان (وفق المتاح)</string>
+    <string name="action_add_house">إضافة بيت</string>
+    <string name="action_edit_house">تعديل</string>
+    <string name="action_change_color">تغيير اللون</string>
+    <string name="action_move_house">نقل</string>
+    <string name="action_delete_house">حذف</string>
+    <string name="action_open_map">معاينة على الخريطة</string>
+    <string name="status_available">متاحة (AVAILABLE)</string>
+    <string name="status_occupied">مشغولة (OCCUPIED)</string>
+    <string name="search_houses_hint">ابحث باسم المالك أو القطعة أو الدولة…</string>
+</resources>

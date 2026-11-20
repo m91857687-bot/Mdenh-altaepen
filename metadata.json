@@ -1,0 +1,6 @@
+{
+  "name": "مدينة الطيبين",
+  "description": "مدينة افتراضية بمنظور Isometric 2.5D للاستكشاف والإدارة عبر تطبيقين بنواة مشتركة.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

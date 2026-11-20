@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">مدينة الطيبين</string>
+    <string name="city_subtitle">وضع الاستكشاف • ١٢ بيتًا (تجريبي)</string>
+    <string name="phase1_test_badge">بيانات تجريبية</string>
+    <string name="house_owner_label">صاحب البيت</string>
+    <string name="house_country_label">الدولة</string>
+    <string name="house_family_label">عدد أفراد الأسرة</string>
+    <string name="house_family_count_format">%1$d أفراد</string>
+    <string name="value_unavailable">غير متوفر</string>
+    <string name="house_public_info_title">معلومات إضافية منشورة</string>
+    <string name="house_no_public_info">لا توجد معلومات إضافية منشورة</string>
+    <string name="house_approved_contact_title">تواصل منشور بموافقة المالك</string>
+    <string name="close_card_cd">إغلاق بطاقة البيت</string>
+    <string name="recenter_camera_cd">توسيط الخريطة</string>
+    <string name="tap_house_hint">اضغط على أي بيت لاستعراض بطاقته، واسحب أو قرّب بإصبعين للتنقل</string>
+    <string name="retry_load">إعادة المحاولة</string>
+    <string name="loading_city">جارٍ تجهيز المدينة…</string>
+</resources>
