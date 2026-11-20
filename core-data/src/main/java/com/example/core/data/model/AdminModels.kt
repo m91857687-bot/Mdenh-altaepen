@@ -14,7 +14,13 @@ data class AdminHouseDraft(
     val publicNeighborhoodRole: String? = null,
     val publicAbout: String? = null,
     val allowPublicInfo: Boolean = true,
-    val showFamilyCountPublicly: Boolean = true
+    val showFamilyCountPublicly: Boolean = true,
+    val phoneNumber: String? = null,
+    val email: String? = null,
+    val additionalPhone: String? = null,
+    val privateNotes: String? = null,
+    val allowPhonePublic: Boolean = false,
+    val allowEmailPublic: Boolean = false
 )
 
 data class AdminCitySnapshot(

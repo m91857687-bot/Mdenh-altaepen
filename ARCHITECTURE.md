@@ -3,9 +3,9 @@
 ## 1. النظرة العامة والمعمارية العامة
 يعتمد المشروع نمط **Modular Clean Architecture + MVVM** مع فصل صارم بين:
 1. **نواة محرك المدينة (`core-city`)**: طبقة مستقلة عن التطبيقات وعن الشبكة، مسؤولة عن الإسقاط الأيزومتري، الكاميرا، إدارة قطع الأراضي، التحقق المكاني، ومُصيّر الرسم (Renderer).
-2. **نواة البيانات (`core-data`)**: نماذج الشبكة/التخزين ومستودعات Supabase (في المراحل اللاحقة)، بدون أي اعتماد على واجهة المستخدم.
-3. **تطبيق الاستكشاف (`app-explorer`)**: واجهات الزوار، عرض المدينة، بطاقة البيت، ونموذج طلب بناء بيت.
-4. **تطبيق الإدارة (`app-admin`)**: واجهات المالك، تسجيل الدخول الإداري، إدارة البيوت والأراضي، ومعالجة الطلبات.
+2. **نواة البيانات (`core-data`)**: نماذج الشبكة/التخزين، ومخزن اعتماد الجهاز المشفّر (`Android Keystore`)، ومستودعات Supabase، بدون أي اعتماد على واجهة المستخدم.
+3. **تطبيق الاستكشاف (`app-explorer`)**: واجهات الزوار، عرض المدينة، بطاقة البيت، ونموذج طلب بناء بيت (مستقبلاً).
+4. **تطبيق الإدارة (`app-admin`)**: لوحة تحكم المالك المباشرة بعد اعتماد الجهاز لمرة واحدة عبر الخادم، إدارة البيوت والأراضي، ومعالجة الطلبات.
 
 ```
 +-------------------+       +-------------------+
@@ -112,9 +112,22 @@
 
 ---
 
-## 8. المزامنة الخلفية وصلاحيات الإدارة (Supabase — مراحل لاحقة)
-- **التخزين المركزي:** Supabase PostgreSQL للجداول (`plots`, `houses`, `house_requests`, `city_elements`).
-- **الأمان من جهة الخادم:** Row Level Security (RLS):
-  - القراءة العامة لخريطة المدينة متاحة للجميع (Anon Key) دون تسجيل دخول.
-  - إدراج طلب بناء في `house_requests` متاح للزوار دون حساب دائم مع فرض `status = 'PENDING'` عبر RLS.
-  - تعديل `plots` و`houses` والموافقة على الطلبات محصور عبر RLS بدور/مستخدم الإدارة الموثّق بـ Supabase Auth فقط.
+## 8. المزامنة الخلفية وأمان اعتماد الجهاز (Supabase — المرحلة 4)
+- **التخزين المركزي:** Supabase PostgreSQL للجداول التسعة: `profiles`, `city_layout`, `plots`, `houses`, `house_private_details`, `house_public_details`, `house_requests`, `admin_activation_codes`, `admin_devices`.
+- **اعتماد الجهاز لمرة واحدة في `:app-admin` (بديل الدخول التقليدي):**
+  1. يُصدر مالك المشروع رمز تفعيل لمرة واحدة من جهة الخادم فقط عبر `create_admin_activation_code()` (تُخزَّن بصمته SHA-256 فقط، وتُمنع قراءته من أي عميل).
+  2. في أول تشغيل لجهاز غير معتمد، تظهر شاشة تفعيل أولي فقط (`AdminDeviceActivationScreen`). عند إدخال الرمز، تُنفّذ دالة `activate_admin_device()` فحصًا ذريًا (`FOR UPDATE`) وتُرجع رمز جلسة جهاز عشوائي (256-bit) مع حفظ بصمته SHA-256 في `admin_devices`.
+  3. يحفظ `:app-admin` بيانات اعتماد الجهاز مشفّرة عبر **Android Keystore (`AES/GCM/NoPadding`)** داخل `KeystoreAdminDeviceCredentialStore` ولا يكتب أي رمز كنص صريح.
+  4. عند كل فتح للتطبيق وقبل كل عملية تعديل إدارية حساسة، يتحقق `SupabaseDeviceAuthRepository` عبر `verify_admin_device()`:
+     - جهاز معتمد (`ACTIVE`): فتح `Dashboard` مباشرةً دون شاشة دخول.
+     - جهاز غير معتمد (`UNENROLLED`): عرض شاشة التفعيل الأولي فقط.
+     - جهاز ملغى (`REVOKED` عبر `revoke_admin_device()`): مسح الاعتماد المحلي وحظر لوحة الإدارة.
+     - انقطاع الإنترنت: حظر الدخول والعمليات الإدارية برسالة واضحة دون اعتماد التخزين المحلي وحده.
+  5. يُرسل عميل الإدارة فقط (`SupabaseClientProvider.getOrCreateAdminClient`) ترويستي `x-admin-device-id` و`x-admin-device-token` مع طلبات PostgREST، وتتحقق الدالة الخادمية `public.is_admin_device()` (المستدعاة داخل `public.is_admin()`) منهما في كل سياسة RLS ودالة `admin_*`.
+- **فصل الخصوصية:**
+  - `house_private_details` و`houses` محميان كليًا بصلاحيات الإدارة فقط (`public.is_admin()`), وتكون موافقات نشر الهاتف (`allow_phone_public`) والبريد (`allow_email_public`) مفصولة ومرفوضة افتراضيًا (`false`).
+  - `house_public_details` يُحدَّث تلقائيًا عبر مشغّلات قاعدة البيانات ولا يحتوي أبدًا على بيانات خاصة غير مصرّح بنشرها.
+  - جدولا `admin_activation_codes` و`admin_devices` مقفلان بسياسة `USING (false) WITH CHECK (false)` ولا يُدارا إلا عبر دوال `SECURITY DEFINER` وSQL Editor.
+- **المزامنة اللحظية (Supabase Realtime):**
+  - يتلقى تطبيق الاستكشاف التحديثات التزايدية على `house_public_details` و`plots` و`city_layout`.
+  - يتلقى تطبيق الإدارة تنبيهات التغيير عبر `house_public_details` و`plots` و`city_layout` ثم يحدّث الصف المعني من `houses` و`house_private_details` عبر طلب PostgREST محمي بترويسات الجهاز المعتمدة.

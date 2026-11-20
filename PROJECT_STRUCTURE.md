@@ -1,24 +1,40 @@
 # PROJECT_STRUCTURE — هيكل الملفات والوحدات
 
-## 1. البنية الحالية للمستودع (بعد المرحلة الثالثة)
-يضم المستودع تطبيقين مستقلين (`:app` للزوار/الاستكشاف و`:app-admin` للإدارة) يتشاركان مكتبتي النواة (`:core-city` و`:core-data`) مع إبقاء `:app` كوحدة الاستكشاف المعمول بها في AI Studio، وإضافة مسار GitHub Actions لإنتاج ملفي APK مستقلين:
+## 1. البنية الحالية للمستودع (بعد المرحلة الرابعة)
+يضم المستودع تطبيقين مستقلين (`:app` للزوار/الاستكشاف و`:app-admin` للإدارة) يتشاركان مكتبتي النواة (`:core-city` و`:core-data`) مع طبقة Supabase المركزية في `:core-data`، ومخطط SQL المقسم في `supabase/sql/`، ومسار GitHub Actions لإنتاج ملفي APK مستقلين:
 
 ```text
 MadinatAlTayibin/
+├── .env.example                                # قالب SUPABASE_URL و SUPABASE_ANON_KEY (دون أي مفاتيح سرية)
 ├── .github/workflows/
 │   └── android-dual-apk.yml                    # سير عمل GitHub Actions لاختبار 4 وحدات وإنتاج ملفي APK
+│
+├── supabase/sql/                               # مخطط قاعدة البيانات المقسم (< 500 سطر لكل ملف)
+│   ├── README.md                               # ترتيب التنفيذ والاستعلامات التحققية واعتماد الجهاز
+│   ├── part_01_extensions.sql                  # pgcrypto و set_updated_at()
+│   ├── part_02_profiles.sql                    # profiles + admin_activation_codes + admin_devices + is_admin_device() + is_admin()
+│   ├── part_03_city_layout.sql                 # city_layout + plots
+│   ├── part_04_houses_and_privacy.sql          # houses + house_private_details + house_public_details
+│   ├── part_05_house_requests.sql              # house_requests (مهيأ للمرحلة 5)
+│   ├── part_06_relationships_constraints.sql   # العلاقات + القيود الفريدة + التحقق المكاني في DB
+│   ├── part_07_indexes.sql                     # فهارس الأداء وفهارس الأجهزة الموثوقة
+│   ├── part_08_functions.sql                   # مزامنة البيانات العامة + دوال admin_* الذرية
+│   ├── part_09_rls_policies.sql                # سياسات RLS على الجداول التسعة
+│   ├── part_10_realtime.sql                    # تفعيل REPLICA IDENTITY FULL و supabase_realtime
+│   ├── part_11_seed_data.sql                   # بيانات البذر الآمنة للـ 12 قطعة و12 بيتًا
+│   └── part_12_device_auth_functions.sql       # دوال إنشاء الرموز والتفعيل والتحقق والإلغاء الخادمي
 │
 ├── core-city/                                  # وحدة المكتبة المشتركة لمحرك المدينة الأيزومتري
 │   ├── build.gradle.kts
 │   └── src/
 │       ├── main/java/com/example/cityengine/
-│       │   ├── model/CityModels.kt             # + HouseColorPreset, selectedPlotId, PlotSelected
+│       │   ├── model/CityModels.kt
 │       │   ├── projection/IsoProjection.kt
 │       │   ├── camera/CameraController.kt
 │       │   ├── world/{PlotManager,SpatialValidator,StarterCityMap}.kt
 │       │   ├── render/{CityRenderer,RoadRenderer,HouseRenderer,TreeRenderer,FlagRenderer}.kt
-│       │   ├── CityEngine.kt                   # + findPlotAtScreenPoint, findPlotAtWorldPoint
-│       │   └── ui/CityCanvas.kt                # + onPlotTapped اختياري
+│       │   ├── CityEngine.kt
+│       │   └── ui/CityCanvas.kt
 │       └── test/java/com/example/cityengine/
 │           ├── IsoProjectionTest.kt
 │           ├── CameraControllerTest.kt
@@ -26,18 +42,34 @@ MadinatAlTayibin/
 │           ├── StarterCityMapTest.kt
 │           └── CityHitTestingTest.kt
 │
-├── core-data/                                  # وحدة البيانات المشتركة وحماية الخصوصية والإدارة المحلية
+├── core-data/                                  # وحدة البيانات المشتركة وطبقة Supabase المركزية
 │   ├── build.gradle.kts
 │   └── src/
 │       ├── main/java/com/example/core/data/
 │       │   ├── model/{ExplorerModels,AdminModels}.kt
 │       │   ├── privacy/HousePrivacySanitizer.kt
 │       │   ├── repository/{CityExplorerRepository,CityAdminRepository}.kt
-│       │   └── local/{LocalCityExplorerRepository,LocalCityAdminRepository}.kt
+│       │   ├── local/{LocalCityExplorerRepository,LocalCityAdminRepository}.kt
+│       │   └── supabase/
+│       │       ├── SupabaseConfig.kt
+│       │       ├── SupabaseClientProvider.kt
+│       │       ├── SupabaseDto.kt
+│       │       ├── SupabaseMapper.kt
+│       │       ├── ConnectivityChecker.kt
+│       │       ├── SupabaseErrorTranslator.kt
+│       │       ├── AdminDeviceCredentialStore.kt
+│       │       ├── SupabaseDeviceAuthRepository.kt
+│       │       ├── SupabaseCityExplorerRepository.kt
+│       │       └── SupabaseCityAdminRepository.kt
 │       └── test/java/com/example/core/data/
 │           ├── HousePrivacySanitizerTest.kt
 │           ├── LocalCityExplorerRepositoryTest.kt
-│           └── LocalCityAdminRepositoryTest.kt
+│           ├── LocalCityAdminRepositoryTest.kt
+│           ├── SupabaseConfigTest.kt
+│           ├── KeystoreDeviceCredentialStoreTest.kt
+│           ├── SqlSchemaVerificationTest.kt
+│           ├── SupabaseRepositoriesTest.kt
+│           └── LiveSupabaseIntegrationTest.kt
 │
 ├── app/                                        # تطبيق الاستكشاف للزوار (app-explorer host)
 │   ├── build.gradle.kts                        # applicationId: com.aistudio.madinataltayibin.k7m2px
@@ -45,7 +77,7 @@ MadinatAlTayibin/
 │       ├── main/java/com/example/
 │       │   ├── explorer/{CityExplorerViewModel,CityExplorerScreen}.kt
 │       │   ├── ui/theme/{Color,Type,Theme}.kt
-│       │   └── MainActivity.kt
+│       │   └── MainActivity.kt                 # مرتبط بـ BuildConfig.SUPABASE_URL / ANON_KEY
 │       └── test/java/com/example/
 │           ├── CityExplorerViewModelTest.kt
 │           ├── ExampleRobolectricTest.kt
@@ -59,10 +91,11 @@ MadinatAlTayibin/
         │   ├── AndroidManifest.xml
         │   ├── res/                            # أيقونة تكيفية خاصة، strings.xml (إدارة الطيبين)، خطوط محلية
         │   └── java/com/example/admin/
-        │       ├── MainActivity.kt
+        │       ├── MainActivity.kt             # مرتبط بـ BuildConfig.SUPABASE_URL / ANON_KEY
         │       ├── AdminViewModel.kt
         │       └── ui/
         │           ├── theme/{Color,Type,Theme}.kt
+        │           ├── AdminDeviceActivationScreen.kt
         │           ├── AdminAppScreen.kt
         │           ├── AdminDashboardScreen.kt
         │           ├── AdminHousesScreen.kt

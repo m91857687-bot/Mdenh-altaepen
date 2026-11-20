@@ -1,16 +1,24 @@
 package com.example.admin.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -48,6 +56,7 @@ import com.example.admin.R
 import com.example.cityengine.CityEngine
 import com.example.cityengine.model.House
 import com.example.core.data.model.AdminOperationResult
+import com.example.core.data.supabase.AdminDeviceAuthState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +87,34 @@ fun AdminAppScreen(
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        val authorizedState = uiState.authState as? AdminDeviceAuthState.Authorized
+        if (authorizedState == null) {
+            Scaffold(
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = stringResource(R.string.admin_header_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.testTag("admin_top_title")
+                            )
+                        }
+                    )
+                }
+            ) { innerPadding ->
+                AdminDeviceActivationScreen(
+                    authState = uiState.authState,
+                    onActivateDevice = viewModel::activateDevice,
+                    onRetryVerification = viewModel::retryDeviceVerification,
+                    onBeginReEnrollment = viewModel::beginReEnrollmentFromRevoked,
+                    modifier = Modifier.padding(innerPadding)
+                )
+            }
+            return@CompositionLocalProvider
+        }
+
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val useRail = maxWidth >= 600.dp
 
@@ -136,76 +173,96 @@ fun AdminAppScreen(
 
                     val snapshot = uiState.snapshot
                     val scene = uiState.sceneWithSelection
-                    if (uiState.isLoading || snapshot == null || scene == null) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                    when {
+                        uiState.isLoading && snapshot == null -> {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
                         }
-                    } else {
-                        val engine = remember(scene.gridWidth, scene.gridHeight) {
-                            CityEngine(
-                                initialGridWidth = scene.gridWidth,
-                                initialGridHeight = scene.gridHeight
+                        uiState.isEmpty && snapshot == null -> {
+                            AdminStatusRetryState(
+                                message = "لا توجد بيانات مدينة مهيأة على الخادم بعد.",
+                                isOffline = false,
+                                onRetry = viewModel::retryLoad
                             )
                         }
-
-                        when (uiState.activeTab) {
-                            AdminTab.DASHBOARD -> AdminDashboardScreen(
-                                snapshot = snapshot,
-                                engine = engine,
-                                onNavigateTab = { viewModel.selectTab(it) },
-                                onOpenAddHouse = {
-                                    preselectedPlotForAdd = uiState.availablePlots.firstOrNull()?.id
-                                    showAddDialog = true
-                                }
+                        uiState.errorMessage != null && snapshot == null -> {
+                            AdminStatusRetryState(
+                                message = uiState.errorMessage.orEmpty(),
+                                isOffline = uiState.isOffline,
+                                onRetry = viewModel::retryLoad
                             )
+                        }
+                        snapshot != null && scene != null -> {
+                            val engine = remember(scene.gridWidth, scene.gridHeight) {
+                                CityEngine(
+                                    initialGridWidth = scene.gridWidth,
+                                    initialGridHeight = scene.gridHeight
+                                )
+                            }
 
-                            AdminTab.HOUSES -> AdminHousesScreen(
-                                houses = uiState.filteredHouses,
-                                searchQuery = uiState.houseSearchQuery,
-                                canAddMoreHouses = uiState.availablePlots.isNotEmpty(),
-                                onSearchQueryChange = viewModel::updateSearchQuery,
-                                onAddHouseClick = {
-                                    preselectedPlotForAdd = uiState.availablePlots.firstOrNull()?.id
-                                    showAddDialog = true
-                                },
-                                onEditHouseClick = { editingHouse = it },
-                                onChangeColorClick = { colorHouse = it },
-                                onMoveHouseClick = { movingHouse = it },
-                                onDeleteHouseClick = { deletingHouse = it },
-                                onViewOnMapClick = { viewModel.focusHouseOnMap(it.id) }
-                            )
+                            when (uiState.activeTab) {
+                                AdminTab.DASHBOARD -> AdminDashboardScreen(
+                                    snapshot = snapshot,
+                                    engine = engine,
+                                    isOffline = uiState.isOffline,
+                                    offlineMessage = uiState.offlineMessage,
+                                    authorizedDeviceName = if (uiState.requiresDeviceAuth) authorizedState.deviceName else null,
+                                    onNavigateTab = { viewModel.selectTab(it) },
+                                    onOpenAddHouse = {
+                                        preselectedPlotForAdd = uiState.availablePlots.firstOrNull()?.id
+                                        showAddDialog = true
+                                    }
+                                )
 
-                            AdminTab.PLOTS -> AdminPlotsScreen(
-                                plots = uiState.filteredPlots,
-                                housesById = snapshot.scene.houses.associateBy { it.id },
-                                activeFilter = uiState.plotFilter,
-                                validatePlot = viewModel::validatePlotForBuild,
-                                onFilterChange = viewModel::setPlotFilter,
-                                onSelectOnMap = { viewModel.focusPlotOnMap(it.id) },
-                                onBuildOnPlot = { plot ->
-                                    preselectedPlotForAdd = plot.id
-                                    showAddDialog = true
-                                },
-                                onInspectHouse = { house -> viewModel.focusHouseOnMap(house.id) }
-                            )
+                                AdminTab.HOUSES -> AdminHousesScreen(
+                                    houses = uiState.filteredHouses,
+                                    searchQuery = uiState.houseSearchQuery,
+                                    canAddMoreHouses = uiState.availablePlots.isNotEmpty(),
+                                    onSearchQueryChange = viewModel::updateSearchQuery,
+                                    onAddHouseClick = {
+                                        preselectedPlotForAdd = uiState.availablePlots.firstOrNull()?.id
+                                        showAddDialog = true
+                                    },
+                                    onEditHouseClick = { editingHouse = it },
+                                    onChangeColorClick = { colorHouse = it },
+                                    onMoveHouseClick = { movingHouse = it },
+                                    onDeleteHouseClick = { deletingHouse = it },
+                                    onViewOnMapClick = { viewModel.focusHouseOnMap(it.id) }
+                                )
 
-                            AdminTab.MAP -> AdminMapScreen(
-                                engine = engine,
-                                scene = scene,
-                                selectedHouse = uiState.selectedHouse,
-                                selectedPlot = uiState.selectedPlot,
-                                onHouseTapped = viewModel::onMapHouseTapped,
-                                onPlotTapped = viewModel::onMapPlotTapped,
-                                onClearSelection = viewModel::clearMapSelection,
-                                onBuildOnPlot = { plot ->
-                                    preselectedPlotForAdd = plot.id
-                                    showAddDialog = true
-                                },
-                                onEditHouse = { editingHouse = it },
-                                onChangeColor = { colorHouse = it },
-                                onMoveHouse = { movingHouse = it },
-                                onDeleteHouse = { deletingHouse = it }
-                            )
+                                AdminTab.PLOTS -> AdminPlotsScreen(
+                                    plots = uiState.filteredPlots,
+                                    housesById = snapshot.scene.houses.associateBy { it.id },
+                                    activeFilter = uiState.plotFilter,
+                                    validatePlot = viewModel::validatePlotForBuild,
+                                    onFilterChange = viewModel::setPlotFilter,
+                                    onSelectOnMap = { viewModel.focusPlotOnMap(it.id) },
+                                    onBuildOnPlot = { plot ->
+                                        preselectedPlotForAdd = plot.id
+                                        showAddDialog = true
+                                    },
+                                    onInspectHouse = { house -> viewModel.focusHouseOnMap(house.id) }
+                                )
+
+                                AdminTab.MAP -> AdminMapScreen(
+                                    engine = engine,
+                                    scene = scene,
+                                    selectedHouse = uiState.selectedHouse,
+                                    selectedPlot = uiState.selectedPlot,
+                                    onHouseTapped = viewModel::onMapHouseTapped,
+                                    onPlotTapped = viewModel::onMapPlotTapped,
+                                    onClearSelection = viewModel::clearMapSelection,
+                                    onBuildOnPlot = { plot ->
+                                        preselectedPlotForAdd = plot.id
+                                        showAddDialog = true
+                                    },
+                                    onEditHouse = { editingHouse = it },
+                                    onChangeColor = { colorHouse = it },
+                                    onMoveHouse = { movingHouse = it },
+                                    onDeleteHouse = { deletingHouse = it }
+                                )
+                            }
                         }
                     }
                 }
@@ -278,6 +335,43 @@ fun AdminAppScreen(
                         }
                     }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminStatusRetryState(
+    message: String,
+    isOffline: Boolean,
+    onRetry: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (isOffline) {
+                Icon(
+                    imageVector = Icons.Rounded.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(44.dp)
+                )
+            }
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Button(onClick = onRetry, modifier = Modifier.testTag("admin_retry_button")) {
+                Text("إعادة المحاولة")
             }
         }
     }

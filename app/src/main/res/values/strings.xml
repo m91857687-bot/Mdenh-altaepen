@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">مدينة الطيبين</string>
     <string name="city_subtitle">وضع الاستكشاف • ١٢ بيتًا (تجريبي)</string>
+    <string name="city_live_subtitle">وضع الاستكشاف المباشر • %1$d بيت</string>
     <string name="phase1_test_badge">بيانات تجريبية</string>
     <string name="house_owner_label">صاحب البيت</string>
     <string name="house_country_label">الدولة</string>
@@ -15,4 +16,6 @@
     <string name="tap_house_hint">اضغط على أي بيت لاستعراض بطاقته، واسحب أو قرّب بإصبعين للتنقل</string>
     <string name="retry_load">إعادة المحاولة</string>
     <string name="loading_city">جارٍ تجهيز المدينة…</string>
+    <string name="empty_city_message">لا توجد بيوت أو أراضٍ منشورة في المدينة حاليًا.</string>
+    <string name="offline_stale_banner">وضع عدم الاتصال • البيانات المعروضة آخر نسخة محمّلة وقد لا تكون محدّثة</string>
 </resources>

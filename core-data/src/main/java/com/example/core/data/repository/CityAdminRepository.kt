@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
  */
 interface CityAdminRepository {
     fun observeAdminSnapshot(): Flow<CityDataState<AdminCitySnapshot>>
+    suspend fun refresh() {}
     suspend fun addHouse(draft: AdminHouseDraft): AdminOperationResult
     suspend fun updateHouse(houseId: String, draft: AdminHouseDraft): AdminOperationResult
     suspend fun changeHouseColor(houseId: String, palette: HousePalette): AdminOperationResult

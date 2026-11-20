@@ -16,6 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddHome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Domain
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Home
@@ -49,6 +51,9 @@ import com.example.core.data.model.AdminCitySnapshot
 fun AdminDashboardScreen(
     snapshot: AdminCitySnapshot,
     engine: CityEngine,
+    isOffline: Boolean = false,
+    offlineMessage: String? = null,
+    authorizedDeviceName: String? = null,
     onNavigateTab: (AdminTab) -> Unit,
     onOpenAddHouse: () -> Unit,
     modifier: Modifier = Modifier
@@ -60,29 +65,47 @@ fun AdminDashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Honest local test mode indicator
+        val bannerContainerColor = when {
+            isOffline -> MaterialTheme.colorScheme.errorContainer
+            snapshot.isLocalTestData -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+            else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+        }
+        val bannerIcon = when {
+            isOffline -> Icons.Rounded.CloudOff
+            snapshot.isLocalTestData -> Icons.Rounded.WarningAmber
+            else -> Icons.Rounded.CloudDone
+        }
+        val baseLiveBanner = stringResource(R.string.admin_live_mode_banner)
+        val bannerText = when {
+            isOffline -> offlineMessage ?: stringResource(R.string.admin_offline_banner)
+            snapshot.isLocalTestData -> stringResource(R.string.admin_local_mode_banner)
+            !authorizedDeviceName.isNullOrBlank() -> "$baseLiveBanner ($authorizedDeviceName)"
+            else -> baseLiveBanner
+        }
+        val bannerTag = if (snapshot.isLocalTestData) "admin_local_mode_banner" else "admin_live_mode_banner"
+
         Surface(
             shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+            color = bannerContainerColor,
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("admin_local_mode_banner")
+                .testTag(bannerTag)
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.WarningAmber,
+                    imageVector = bannerIcon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = if (isOffline) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.admin_local_mode_banner),
+                    text = bannerText,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = if (isOffline) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
                 )
             }
         }

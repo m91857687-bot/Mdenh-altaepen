@@ -105,4 +105,38 @@ class ExampleRobolectricTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("house_family_value").assertTextContains("غير متوفر", substring = true)
     }
+
+    @Test
+    fun `renders empty state and offline banner cleanly`() {
+        val stateFlow = kotlinx.coroutines.flow.MutableStateFlow<com.example.core.data.model.CityDataState<com.example.core.data.model.CityExplorerSnapshot>>(
+            com.example.core.data.model.CityDataState.Empty
+        )
+        val repo = object : com.example.core.data.repository.CityExplorerRepository {
+            override fun observeCitySnapshot() = stateFlow
+            override suspend fun refresh() {}
+        }
+        val viewModel = CityExplorerViewModel(repo)
+
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                CityExplorerScreen(viewModel = viewModel)
+            }
+        }
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("explorer_empty_state").assertIsDisplayed()
+
+        stateFlow.value = com.example.core.data.model.CityDataState.Offline("لا يوجد اتصال")
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("explorer_offline_state").assertIsDisplayed()
+
+        val localSnap = (LocalCityExplorerRepository().observeCitySnapshot() as kotlinx.coroutines.flow.StateFlow).value
+            as com.example.core.data.model.CityDataState.Success
+        stateFlow.value = com.example.core.data.model.CityDataState.Offline(
+            message = "عرض نسخة سابقة دون اتصال",
+            staleData = localSnap.data
+        )
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("city_canvas").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("explorer_offline_banner").assertIsDisplayed()
+    }
 }

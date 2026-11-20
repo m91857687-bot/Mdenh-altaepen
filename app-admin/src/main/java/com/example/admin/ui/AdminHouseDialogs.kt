@@ -26,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -80,6 +81,24 @@ fun AddOrEditHouseDialog(
     }
     var publicAbout by remember(editingRecord) {
         mutableStateOf(editingRecord?.publicAbout.orEmpty())
+    }
+    var phoneNumber by remember(editingRecord) {
+        mutableStateOf(editingRecord?.rawPhoneNumber.orEmpty())
+    }
+    var email by remember(editingRecord) {
+        mutableStateOf(editingRecord?.rawEmail.orEmpty())
+    }
+    var additionalPhone by remember(editingRecord) {
+        mutableStateOf(editingRecord?.rawAdditionalPhone.orEmpty())
+    }
+    var privateNotes by remember(editingRecord) {
+        mutableStateOf(editingRecord?.privateNotes.orEmpty())
+    }
+    var allowPhonePublic by remember(editingRecord) {
+        mutableStateOf(editingRecord?.allowPhonePublic ?: false)
+    }
+    var allowEmailPublic by remember(editingRecord) {
+        mutableStateOf(editingRecord?.allowEmailPublic ?: false)
     }
     var validationError by remember { mutableStateOf<String?>(null) }
 
@@ -222,6 +241,85 @@ fun AddOrEditHouseDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                Text(
+                    text = "بيانات التواصل الخاصة وموافقات النشر:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                OutlinedTextField(
+                    value = phoneNumber,
+                    onValueChange = { phoneNumber = it },
+                    label = { Text("رقم الهاتف (خاص افتراضيًا)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_private_phone")
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "موافقة صريحة على نشر الهاتف",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = allowPhonePublic,
+                        onCheckedChange = { allowPhonePublic = it },
+                        modifier = Modifier.testTag("switch_allow_phone_public")
+                    )
+                }
+
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("البريد الإلكتروني (خاص افتراضيًا)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_private_email")
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "موافقة صريحة على نشر البريد",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = allowEmailPublic,
+                        onCheckedChange = { allowEmailPublic = it },
+                        modifier = Modifier.testTag("switch_allow_email_public")
+                    )
+                }
+
+                OutlinedTextField(
+                    value = additionalPhone,
+                    onValueChange = { additionalPhone = it },
+                    label = { Text("هاتف إضافي (خاص دائمًا)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = privateNotes,
+                    onValueChange = { privateNotes = it },
+                    label = { Text("ملاحظات إدارية خاصة") },
+                    maxLines = 2,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 validationError?.let { err ->
                     Text(
                         text = err,
@@ -250,7 +348,13 @@ fun AddOrEditHouseDialog(
                                 flag = selectedFlag,
                                 palette = selectedPalette,
                                 publicNeighborhoodRole = publicRole.trim().ifEmpty { null },
-                                publicAbout = publicAbout.trim().ifEmpty { null }
+                                publicAbout = publicAbout.trim().ifEmpty { null },
+                                phoneNumber = phoneNumber.trim().ifEmpty { null },
+                                email = email.trim().ifEmpty { null },
+                                additionalPhone = additionalPhone.trim().ifEmpty { null },
+                                privateNotes = privateNotes.trim().ifEmpty { null },
+                                allowPhonePublic = allowPhonePublic,
+                                allowEmailPublic = allowEmailPublic
                             )
                         )
                     }
@@ -393,7 +497,7 @@ fun DeleteHouseConfirmDialog(
         onDismissRequest = onDismiss,
         title = { Text("تأكيد حذف البيت", fontWeight = FontWeight.Bold) },
         text = {
-            Text("هل تريد حذف بيت ${house.ownerName} من القطعة ${house.plotId}؟ ستعود القطعة إلى حالة متاحة (AVAILABLE) محليًا.")
+            Text("هل تريد حذف بيت ${house.ownerName} من القطعة ${house.plotId}؟ ستعود القطعة إلى حالة متاحة (AVAILABLE).")
         },
         confirmButton = {
             Button(

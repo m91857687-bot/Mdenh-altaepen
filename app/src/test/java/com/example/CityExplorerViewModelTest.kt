@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -79,5 +80,38 @@ class CityExplorerViewModelTest {
         val house10 = viewModel.uiState.value.selectedHouse
         assertNotNull(house10)
         assertNull(house10!!.familyMembersCount)
+    }
+
+    @Test
+    fun `exposes empty offline and error states cleanly without crashing`() = runTest {
+        val stateFlow = kotlinx.coroutines.flow.MutableStateFlow<com.example.core.data.model.CityDataState<com.example.core.data.model.CityExplorerSnapshot>>(
+            com.example.core.data.model.CityDataState.Loading
+        )
+        val fakeRepo = object : com.example.core.data.repository.CityExplorerRepository {
+            override fun observeCitySnapshot() = stateFlow
+            override suspend fun refresh() {}
+        }
+        val viewModel = CityExplorerViewModel(fakeRepo)
+        assertTrue(viewModel.uiState.value.isLoading)
+
+        stateFlow.value = com.example.core.data.model.CityDataState.Empty
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertTrue(viewModel.uiState.value.isEmpty)
+
+        stateFlow.value = com.example.core.data.model.CityDataState.Offline("لا يوجد اتصال بالإنترنت")
+        assertTrue(viewModel.uiState.value.isOffline)
+        assertNull(viewModel.uiState.value.scene)
+
+        // Offline with stale snapshot preserves map while marking isOffline = true
+        val localSnap = (LocalCityExplorerRepository().observeCitySnapshot() as kotlinx.coroutines.flow.StateFlow).value
+            as com.example.core.data.model.CityDataState.Success
+        stateFlow.value = com.example.core.data.model.CityDataState.Offline("بيانات قديمة", staleData = localSnap.data)
+        assertTrue(viewModel.uiState.value.isOffline)
+        assertNotNull(viewModel.uiState.value.scene)
+        assertEquals("بيانات قديمة", viewModel.uiState.value.offlineMessage)
+
+        stateFlow.value = com.example.core.data.model.CityDataState.Error("خطأ في الخادم")
+        assertFalse(viewModel.uiState.value.isOffline)
+        assertEquals("خطأ في الخادم", viewModel.uiState.value.errorMessage)
     }
 }

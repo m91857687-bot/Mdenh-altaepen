@@ -29,10 +29,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CenterFocusStrong
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.LocationCity
 import androidx.compose.material.icons.rounded.Phone
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
@@ -92,8 +94,21 @@ fun CityExplorerScreen(
             val scene = uiState.scene
 
             when {
-                uiState.isLoading -> {
+                uiState.isLoading && scene == null -> {
                     ExplorerLoadingState(modifier = Modifier.align(Alignment.Center))
+                }
+                uiState.isEmpty && scene == null -> {
+                    ExplorerEmptyState(
+                        onRetry = { viewModel.retryLoad() },
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                }
+                uiState.isOffline && scene == null -> {
+                    ExplorerOfflineState(
+                        message = uiState.offlineMessage ?: stringResource(R.string.offline_stale_banner),
+                        onRetry = { viewModel.retryLoad() },
+                        modifier = Modifier.align(Alignment.Center)
+                    )
                 }
                 uiState.errorMessage != null && scene == null -> {
                     ExplorerErrorState(
@@ -117,17 +132,36 @@ fun CityExplorerScreen(
                         modifier = Modifier.fillMaxSize()
                     )
 
+                    val subtitle = if (uiState.isTestData) {
+                        stringResource(R.string.city_subtitle)
+                    } else {
+                        stringResource(R.string.city_live_subtitle, scene.houses.size)
+                    }
+
                     // Top floating HUD header (designed to stay compact and leave room for future search slot)
-                    ExplorerTopBar(
-                        onRecenterClick = {
-                            val center = engine.initialFocusWorld(scene)
-                            engine.cameraController.centerOnWorld(center.x, center.y, targetZoom = 1.0f)
-                        },
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        ExplorerTopBar(
+                            subtitle = subtitle,
+                            onRecenterClick = {
+                                val center = engine.initialFocusWorld(scene)
+                                engine.cameraController.centerOnWorld(center.x, center.y, targetZoom = 1.0f)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (uiState.isOffline) {
+                            ExplorerOfflineBanner(
+                                message = uiState.offlineMessage ?: stringResource(R.string.offline_stale_banner),
+                                onRetry = { viewModel.retryLoad() }
+                            )
+                        }
+                    }
 
                     // Bottom area: calm exploration hint or selected house info card
                     val cardAlignment = if (isWideScreen) Alignment.BottomStart else Alignment.BottomCenter
@@ -181,6 +215,7 @@ fun CityExplorerScreen(
 
 @Composable
 private fun ExplorerTopBar(
+    subtitle: String,
     onRecenterClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -223,7 +258,7 @@ private fun ExplorerTopBar(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = stringResource(R.string.city_subtitle),
+                        text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -552,7 +587,9 @@ private fun ExplorerErrorState(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(24.dp),
+        modifier = modifier
+            .padding(24.dp)
+            .testTag("explorer_error_state"),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -561,8 +598,111 @@ private fun ExplorerErrorState(
             color = MaterialTheme.colorScheme.error
         )
         Spacer(modifier = Modifier.height(12.dp))
+        Button(onClick = onRetry, modifier = Modifier.testTag("explorer_retry_button")) {
+            Text(text = stringResource(R.string.retry_load))
+        }
+    }
+}
+
+@Composable
+private fun ExplorerEmptyState(
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .padding(24.dp)
+            .testTag("explorer_empty_state"),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.LocationCity,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.empty_city_message),
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         Button(onClick = onRetry) {
             Text(text = stringResource(R.string.retry_load))
+        }
+    }
+}
+
+@Composable
+private fun ExplorerOfflineState(
+    message: String,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .padding(24.dp)
+            .testTag("explorer_offline_state"),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.CloudOff,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(48.dp)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(onClick = onRetry, modifier = Modifier.testTag("explorer_offline_retry_button")) {
+            Text(text = stringResource(R.string.retry_load))
+        }
+    }
+}
+
+@Composable
+private fun ExplorerOfflineBanner(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f),
+        tonalElevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("explorer_offline_banner")
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            androidx.compose.material3.TextButton(onClick = onRetry) {
+                Text(stringResource(R.string.retry_load))
+            }
         }
     }
 }

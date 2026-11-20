@@ -102,8 +102,12 @@ class LocalCityAdminRepository(
             is ValidationResult.Valid -> {
                 records[newId] = HouseResidentSourceRecord(
                     house = newHouse,
-                    allowPhonePublic = false,
-                    allowEmailPublic = false,
+                    rawPhoneNumber = draft.phoneNumber?.trim()?.takeIf { it.isNotEmpty() },
+                    rawEmail = draft.email?.trim()?.takeIf { it.isNotEmpty() },
+                    rawAdditionalPhone = draft.additionalPhone?.trim()?.takeIf { it.isNotEmpty() },
+                    privateNotes = draft.privateNotes?.trim()?.takeIf { it.isNotEmpty() },
+                    allowPhonePublic = draft.allowPhonePublic,
+                    allowEmailPublic = draft.allowEmailPublic,
                     publicNeighborhoodRole = draft.publicNeighborhoodRole?.trim()?.takeIf { it.isNotEmpty() },
                     publicAbout = draft.publicAbout?.trim()?.takeIf { it.isNotEmpty() },
                     allowPublicInfo = draft.allowPublicInfo,
@@ -144,6 +148,12 @@ class LocalCityAdminRepository(
                 val prevRecord = records[houseId]
                 records[houseId] = (prevRecord ?: HouseResidentSourceRecord(house = updated)).copy(
                     house = updated,
+                    rawPhoneNumber = draft.phoneNumber?.trim()?.takeIf { it.isNotEmpty() },
+                    rawEmail = draft.email?.trim()?.takeIf { it.isNotEmpty() },
+                    rawAdditionalPhone = draft.additionalPhone?.trim()?.takeIf { it.isNotEmpty() },
+                    privateNotes = draft.privateNotes?.trim()?.takeIf { it.isNotEmpty() },
+                    allowPhonePublic = draft.allowPhonePublic,
+                    allowEmailPublic = draft.allowEmailPublic,
                     publicNeighborhoodRole = draft.publicNeighborhoodRole?.trim()?.takeIf { it.isNotEmpty() },
                     publicAbout = draft.publicAbout?.trim()?.takeIf { it.isNotEmpty() },
                     allowPublicInfo = draft.allowPublicInfo,

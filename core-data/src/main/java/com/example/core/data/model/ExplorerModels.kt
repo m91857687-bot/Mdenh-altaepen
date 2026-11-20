@@ -12,6 +12,8 @@ data class HouseResidentSourceRecord(
     val house: House,
     val rawPhoneNumber: String? = null,
     val rawEmail: String? = null,
+    val rawAdditionalPhone: String? = null,
+    val privateNotes: String? = null,
     val allowPhonePublic: Boolean = false,
     val allowEmailPublic: Boolean = false,
     val publicNeighborhoodRole: String? = null,
@@ -54,6 +56,8 @@ data class CityExplorerSnapshot(
 
 sealed interface CityDataState<out T> {
     data object Loading : CityDataState<Nothing>
+    data object Empty : CityDataState<Nothing>
     data class Success<T>(val data: T) : CityDataState<T>
+    data class Offline<T>(val message: String, val staleData: T? = null) : CityDataState<T>
     data class Error(val message: String) : CityDataState<Nothing>
 }
