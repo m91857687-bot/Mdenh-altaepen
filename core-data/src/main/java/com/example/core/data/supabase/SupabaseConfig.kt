@@ -31,7 +31,7 @@ data class SupabaseConfig(
         get() = normalizedAnonKey.isNotEmpty()
 
     val isPrivilegedServiceRoleKey: Boolean
-        get() = isServiceRoleJwt(normalizedAnonKey)
+        get() = isPrivilegedKey(normalizedAnonKey)
 
     val isConfigured: Boolean
         get() = isUrlValid && isKeyPresent && !isPrivilegedServiceRoleKey
@@ -52,6 +52,9 @@ data class SupabaseConfig(
     companion object {
         const val DEFAULT_URL_PLACEHOLDER = "SUPABASE_URL_DEFAULT_VALUE"
         const val DEFAULT_ANON_KEY_PLACEHOLDER = "SUPABASE_ANON_KEY_DEFAULT_VALUE"
+
+        internal fun isPrivilegedKey(token: String): Boolean =
+            token.startsWith("sb_secret_", ignoreCase = true) || isServiceRoleJwt(token)
 
         internal fun isServiceRoleJwt(token: String): Boolean {
             val parts = token.split('.')

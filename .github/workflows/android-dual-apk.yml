@@ -47,6 +47,18 @@ jobs:
             fi
           fi
 
+      - name: Configure .env from GitHub Secrets (if set)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
+            echo "Configured .env from GitHub Secrets."
+          else
+            echo "::warning::GitHub Secrets SUPABASE_URL and SUPABASE_ANON_KEY are not set; APKs will be built with placeholder defaults from .env.example."
+          fi
+
       - name: Build Explorer APK (:app)
         run: gradle :app:assembleDebug --console=plain
 

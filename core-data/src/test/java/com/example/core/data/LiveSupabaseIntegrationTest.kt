@@ -16,9 +16,8 @@ import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -37,11 +36,9 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveSupabaseIntegrationTest {
 
-    private val dispatcher = StandardTestDispatcher()
-
     @Before
     fun setUp() {
-        Dispatchers.setMain(dispatcher)
+        Dispatchers.setMain(Dispatchers.Unconfined)
     }
 
     @After
@@ -61,14 +58,14 @@ class LiveSupabaseIntegrationTest {
     }
 
     @Test
-    fun `live visitor reads public houses and cannot read house_private_details or houses`() = runTest(dispatcher) {
+    fun `live visitor reads public houses and cannot read house_private_details or houses`() = runBlocking {
         val config = liveConfigOrSkip()
         val client = SupabaseClientProvider.createClient(config, autoLoadFromStorage = false)
 
         val explorerRepo = SupabaseCityExplorerRepository(
             config = config,
             clientProvider = { client },
-            ioDispatcher = dispatcher,
+            ioDispatcher = Dispatchers.IO,
             enableRealtime = false
         )
 
@@ -99,7 +96,7 @@ class LiveSupabaseIntegrationTest {
     }
 
     @Test
-    fun `live unauthenticated caller cannot invoke admin mutations and signed in ADMIN can read snapshot`() = runTest(dispatcher) {
+    fun `live unauthenticated caller cannot invoke admin mutations and signed in ADMIN can read snapshot`() = runBlocking {
         val config = liveConfigOrSkip()
         val adminEmail = System.getenv("SUPABASE_ADMIN_EMAIL").orEmpty()
         val adminPassword = System.getenv("SUPABASE_ADMIN_PASSWORD").orEmpty()
@@ -118,7 +115,7 @@ class LiveSupabaseIntegrationTest {
             config = config,
             authRepository = authRepo,
             clientProvider = { client },
-            ioDispatcher = dispatcher,
+            ioDispatcher = Dispatchers.IO,
             enableRealtime = false
         )
 

@@ -52,4 +52,23 @@ class SupabaseConfigTest {
         assertNull(config.validationErrorOrNull())
         assertTrue(config.normalizedUrl == "https://project.supabase.co")
     }
+
+    @Test
+    fun `publishable key passes and sb_secret key is rejected`() {
+        val publishableConfig = SupabaseConfig(
+            "https://project.supabase.co",
+            "sb_publishable_example_public_key_12345"
+        )
+        assertFalse(publishableConfig.isPrivilegedServiceRoleKey)
+        assertTrue(publishableConfig.isConfigured)
+        assertNull(publishableConfig.validationErrorOrNull())
+
+        val secretConfig = SupabaseConfig(
+            "https://project.supabase.co",
+            "sb_secret_example_privileged_key_12345"
+        )
+        assertTrue(secretConfig.isPrivilegedServiceRoleKey)
+        assertFalse(secretConfig.isConfigured)
+        assertNotNull(secretConfig.validationErrorOrNull())
+    }
 }
