@@ -11,19 +11,14 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.serializer.KotlinXSerializer
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.plugins.api.createClientPlugin
-import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.Json
 
 /**
  * Central Supabase client factory shared across :app (Explorer) and :app-admin (Admin).
- * Keeps connection details in one module (:core-data) and attaches admin device verification
- * headers strictly to admin clients — never to public Explorer clients.
+ * Keeps connection details in one module (:core-data) and keeps the Admin Auth session
+ * strictly isolated from the anonymous public Explorer client.
  */
 object SupabaseClientProvider {
-
-    const val HEADER_ADMIN_DEVICE_ID = "x-admin-device-id"
-    const val HEADER_ADMIN_DEVICE_TOKEN = "x-admin-device-token"
 
     val json: Json = Json {
         ignoreUnknownKeys = true
@@ -43,8 +38,6 @@ object SupabaseClientProvider {
     @Volatile
     private var cachedAdminClient: SupabaseClient? = null
 
-    private val activeAdminHeaderProvider = AtomicReference<(() -> Pair<String, String>?)?>(null)
-
     fun getOrCreate(
         config: SupabaseConfig,
         sessionManager: SessionManager? = null
@@ -60,8 +53,9 @@ object SupabaseClientProvider {
             }
             val created = createClient(
                 config = config,
-                sessionManager = sessionManager,
-                deviceHeaderProvider = null
+                sessionManager = sessionManager ?: MemorySessionManager(),
+                autoLoadFromStorage = false,
+                alwaysAutoRefresh = false
             )
             cachedExplorerKey = key
             cachedExplorerClient = created
@@ -71,10 +65,10 @@ object SupabaseClientProvider {
 
     fun getOrCreateAdminClient(
         config: SupabaseConfig,
-        deviceHeaderProvider: () -> Pair<String, String>?
+        sessionManager: SessionManager? = null,
+        autoLoadFromStorage: Boolean = true
     ): SupabaseClient? {
         if (!config.isConfigured) return null
-        activeAdminHeaderProvider.set(deviceHeaderProvider)
         val key = "${config.normalizedUrl}|${config.normalizedAnonKey}"
         cachedAdminClient?.let { existing ->
             if (cachedAdminKey == key) return existing
@@ -85,9 +79,9 @@ object SupabaseClientProvider {
             }
             val created = createClient(
                 config = config,
-                sessionManager = MemorySessionManager(),
-                autoLoadFromStorage = false,
-                deviceHeaderProvider = { activeAdminHeaderProvider.get()?.invoke() }
+                sessionManager = sessionManager,
+                autoLoadFromStorage = autoLoadFromStorage,
+                alwaysAutoRefresh = autoLoadFromStorage
             )
             cachedAdminKey = key
             cachedAdminClient = created
@@ -101,7 +95,7 @@ object SupabaseClientProvider {
         httpClientEngine: HttpClientEngine? = null,
         sessionManager: SessionManager? = null,
         autoLoadFromStorage: Boolean = true,
-        deviceHeaderProvider: (() -> Pair<String, String>?)? = null
+        alwaysAutoRefresh: Boolean = autoLoadFromStorage
     ): SupabaseClient {
         val error = config.validationErrorOrNull()
         require(error == null) { error ?: "Invalid Supabase configuration." }
@@ -113,27 +107,11 @@ object SupabaseClientProvider {
             if (httpClientEngine != null) {
                 httpEngine = httpClientEngine
             }
-            if (deviceHeaderProvider != null) {
-                val adminHeadersPlugin = createClientPlugin("AdminDeviceHeadersPlugin") {
-                    onRequest { request, _ ->
-                        val creds = deviceHeaderProvider.invoke()
-                        if (creds != null && creds.first.isNotBlank() && creds.second.isNotBlank()) {
-                            request.headers.remove(HEADER_ADMIN_DEVICE_ID)
-                            request.headers.remove(HEADER_ADMIN_DEVICE_TOKEN)
-                            request.headers.append(HEADER_ADMIN_DEVICE_ID, creds.first)
-                            request.headers.append(HEADER_ADMIN_DEVICE_TOKEN, creds.second)
-                        }
-                    }
-                }
-                httpConfig {
-                    install(adminHeadersPlugin)
-                }
-            }
             defaultSerializer = KotlinXSerializer(json)
             install(Postgrest)
             install(Auth) {
                 this.autoLoadFromStorage = autoLoadFromStorage
-                this.alwaysAutoRefresh = false
+                this.alwaysAutoRefresh = alwaysAutoRefresh
                 if (sessionManager != null) {
                     this.sessionManager = sessionManager
                     this.codeVerifierCache = MemoryCodeVerifierCache()

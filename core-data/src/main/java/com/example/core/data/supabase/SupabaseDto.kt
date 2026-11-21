@@ -126,22 +126,3 @@ data class RpcMutationResultDto(
     @SerialName("plot_id") val plotId: String? = null,
     @SerialName("old_plot_id") val oldPlotId: String? = null
 )
-
-@Serializable
-data class DeviceActivationResultDto(
-    @SerialName("device_id") val deviceId: String,
-    @SerialName("device_token") val deviceToken: String,
-    @SerialName("device_name") val deviceName: String = "",
-    val status: String = "ACTIVE",
-    @SerialName("activated_at") val activatedAt: String? = null
-)
-
-@Serializable
-data class DeviceVerificationResultDto(
-    val authorized: Boolean = false,
-    val status: String = "REVOKED",
-    val reason: String? = null,
-    @SerialName("device_id") val deviceId: String? = null,
-    @SerialName("device_name") val deviceName: String? = null,
-    @SerialName("activated_at") val activatedAt: String? = null
-)

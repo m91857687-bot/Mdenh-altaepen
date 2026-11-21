@@ -10,19 +10,20 @@ MadinatAlTayibin/
 │   └── android-dual-apk.yml                    # سير عمل GitHub Actions لاختبار 4 وحدات وإنتاج ملفي APK
 │
 ├── supabase/sql/                               # مخطط قاعدة البيانات المقسم (< 500 سطر لكل ملف)
-│   ├── README.md                               # ترتيب التنفيذ والاستعلامات التحققية واعتماد الجهاز
+│   ├── README.md                               # ترتيب التنفيذ والاستعلامات التحققية
 │   ├── part_01_extensions.sql                  # pgcrypto و set_updated_at()
-│   ├── part_02_profiles.sql                    # profiles + admin_activation_codes + admin_devices + is_admin_device() + is_admin()
+│   ├── part_02_profiles.sql                    # profiles + is_admin() (التحقق من role = 'ADMIN')
 │   ├── part_03_city_layout.sql                 # city_layout + plots
 │   ├── part_04_houses_and_privacy.sql          # houses + house_private_details + house_public_details
-│   ├── part_05_house_requests.sql              # house_requests (مهيأ للمرحلة 5)
+│   ├── part_05_house_requests.sql              # house_requests
 │   ├── part_06_relationships_constraints.sql   # العلاقات + القيود الفريدة + التحقق المكاني في DB
-│   ├── part_07_indexes.sql                     # فهارس الأداء وفهارس الأجهزة الموثوقة
+│   ├── part_07_indexes.sql                     # فهارس الأداء
 │   ├── part_08_functions.sql                   # مزامنة البيانات العامة + دوال admin_* الذرية
-│   ├── part_09_rls_policies.sql                # سياسات RLS على الجداول التسعة
+│   ├── part_09_rls_policies.sql                # سياسات RLS على الجداول
 │   ├── part_10_realtime.sql                    # تفعيل REPLICA IDENTITY FULL و supabase_realtime
 │   ├── part_11_seed_data.sql                   # بيانات البذر الآمنة للـ 12 قطعة و12 بيتًا
-│   └── part_12_device_auth_functions.sql       # دوال إنشاء الرموز والتفعيل والتحقق والإلغاء الخادمي
+│   ├── part_12_device_auth_functions.sql       # دوال قديمة محفوظة في المستودع دون استخدام في التطبيق
+│   └── part_13_assign_owner_admin.sql          # سكربت ترقية حساب المالك إلى دور ADMIN في profiles
 │
 ├── core-city/                                  # وحدة المكتبة المشتركة لمحرك المدينة الأيزومتري
 │   ├── build.gradle.kts
@@ -57,8 +58,7 @@ MadinatAlTayibin/
 │       │       ├── SupabaseMapper.kt
 │       │       ├── ConnectivityChecker.kt
 │       │       ├── SupabaseErrorTranslator.kt
-│       │       ├── AdminDeviceCredentialStore.kt
-│       │       ├── SupabaseDeviceAuthRepository.kt
+│       │       ├── SupabaseAdminAuthRepository.kt
 │       │       ├── SupabaseCityExplorerRepository.kt
 │       │       └── SupabaseCityAdminRepository.kt
 │       └── test/java/com/example/core/data/
@@ -66,7 +66,6 @@ MadinatAlTayibin/
 │           ├── LocalCityExplorerRepositoryTest.kt
 │           ├── LocalCityAdminRepositoryTest.kt
 │           ├── SupabaseConfigTest.kt
-│           ├── KeystoreDeviceCredentialStoreTest.kt
 │           ├── SqlSchemaVerificationTest.kt
 │           ├── SupabaseRepositoriesTest.kt
 │           └── LiveSupabaseIntegrationTest.kt
@@ -95,7 +94,7 @@ MadinatAlTayibin/
         │       ├── AdminViewModel.kt
         │       └── ui/
         │           ├── theme/{Color,Type,Theme}.kt
-        │           ├── AdminDeviceActivationScreen.kt
+        │           ├── AdminLoginScreen.kt
         │           ├── AdminAppScreen.kt
         │           ├── AdminDashboardScreen.kt
         │           ├── AdminHousesScreen.kt

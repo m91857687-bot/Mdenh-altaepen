@@ -1,6 +1,18 @@
 # CHANGELOG — سجل التغييرات
 
-## [0.4.1] - 2026-11-20 — تحديث نظام دخول الإدارة: اعتماد الجهاز لمرة واحدة وAndroid Keystore
+## [0.4.2] - 2026-11-21 — استعادة نظام مصادقة المرحلة الرابعة (Supabase Auth + دور ADMIN)
+### أُعيد / عُدّل
+- استعادة `SupabaseAdminAuthRepository` (`AdminAuthManager` و`AdminAuthState`) لتسجيل الدخول بالبريد الإلكتروني وكلمة المرور عبر **Supabase Auth** مع التحقق من `public.profiles.role = 'ADMIN'`.
+- استعادة `AdminLoginScreen` وزر تسجيل الخروج (`admin_sign_out_button`) في `AdminAppScreen`، مع حالات `Unauthenticated` و`AccessDenied` (لرفض حسابات `VIEWER`) و`SessionExpired` و`CheckingSession` و`Unconfigured`.
+- تفعيل تحميل وتجديد جلسة الإدارة بأمان في `SupabaseClientProvider.getOrCreateAdminClient` و`SupabaseAdminAuthRepository.restoreAndVerifySession` / `ensureAuthenticatedAdminForMutation`.
+- تحديث `SupabaseErrorTranslator` و`SupabaseCityAdminRepository` و`AdminViewModel` و`AdminDashboardScreen` و`strings.xml`.
+- تحديث `SupabaseRepositoriesTest` و`LiveSupabaseIntegrationTest` و`AdminViewModelTest` و`AdminRobolectricTest` لتغطية دخول `ADMIN`، رفض `VIEWER`، تجديد الجلسة، انتهاء الجلسة (`401`)، فقدان الصلاحية (`42501`)، وتسجيل الخروج.
+- إصلاح قيم `.env.example` الافتراضية لتوليد `BuildConfig.java` بشكل سليم عند غياب `.env`، وإضافة `supabase/sql/part_13_assign_owner_admin.sql`.
+
+### أُزيل من التطبيق
+- إزالة `AdminDeviceCredentialStore` (`KeystoreAdminDeviceCredentialStore`) و`SupabaseDeviceAuthRepository` و`AdminDeviceActivationScreen` و`KeystoreDeviceCredentialStoreTest` وترويستي `x-admin-device-id` / `x-admin-device-token` من مسار المصادقة والإدارة دون حذف أي جداول أو بيانات في Supabase.
+
+## [0.4.1] - 2026-11-20 — تحديث نظام دخول الإدارة: اعتماد الجهاز لمرة واحدة وAndroid Keystore (ملغى بموجب [0.4.2])
 ### أُضيف
 - جدولا `admin_activation_codes` و`admin_devices` ودوال `part_12_device_auth_functions.sql` (`create_admin_activation_code`, `activate_admin_device`, `verify_admin_device`, `revoke_admin_device`, `revoke_admin_activation_code`) ببصمات SHA-256 فقط وعزل RLS كامل (`USING (false)`).
 - مخزن الاعتماد المشفّر `AdminDeviceCredentialStore` (`KeystoreAdminDeviceCredentialStore`) في `:core-data` باستخدام **Android Keystore (`AES/GCM/NoPadding`)**.

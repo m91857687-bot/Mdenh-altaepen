@@ -8,8 +8,8 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 
 /**
- * Translates Supabase/network exceptions into clear, honest Arabic error messages
- * and distinguishes network/offline failures from authorization or validation failures.
+ * Translates Supabase/network/auth exceptions into clear, honest Arabic error messages
+ * and distinguishes network/offline failures from authentication, session, or RLS failures.
  */
 object SupabaseErrorTranslator {
 
@@ -35,20 +35,24 @@ object SupabaseErrorTranslator {
         }
         val msg = throwable.message.orEmpty()
         if (throwable is RestException) {
-            val firstLine = msg.lineSequence().firstOrNull()?.trim().orEmpty()
             return when {
-                msg.contains("رمز التفعيل") ->
-                    firstLine.ifBlank { fallback }
-                msg.contains("إلغاء اعتماد هذا الجهاز") || msg.contains("غير معتمد") ->
-                    firstLine.ifBlank { fallback }
+                msg.contains("Invalid login credentials", ignoreCase = true) ||
+                    msg.contains("invalid_credentials", ignoreCase = true) ->
+                    "البريد الإلكتروني أو كلمة المرور غير صحيحة."
+                msg.contains("Email not confirmed", ignoreCase = true) ->
+                    "الحساب غير مؤكّد بالبريد الإلكتروني بعد."
                 msg.contains("JWT expired", ignoreCase = true) ||
-                    (msg.contains("session", ignoreCase = true) && msg.contains("expired", ignoreCase = true)) ->
-                    "انتهت صلاحية اعتماد الجلسة. يرجى إعادة التحقق من الجهاز."
+                    msg.contains("invalid_grant", ignoreCase = true) ||
+                    msg.contains("refresh_token_not_found", ignoreCase = true) ||
+                    (msg.contains("session", ignoreCase = true) && msg.contains("expired", ignoreCase = true)) ||
+                    msg.contains("401") ->
+                    "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مجددًا."
                 msg.contains("42501") ||
                     msg.contains("permission denied", ignoreCase = true) ||
                     msg.contains("row-level security", ignoreCase = true) ||
-                    msg.contains("صلاحيات المدير") ->
-                    "عملية مرفوضة: الجهاز غير معتمد أو تم إلغاء صلاحيته من الخادم."
+                    msg.contains("صلاحيات المدير") ||
+                    msg.contains("403") ->
+                    "عملية مرفوضة: الحساب لا يمتلك صلاحيات المدير (ADMIN)."
                 msg.contains("uq_houses_plot_id") || msg.contains("مشغولة") || msg.contains("AVAILABLE") ->
                     "قطعة الأرض المحددة مشغولة أو غير متاحة."
                 msg.contains("uq_houses_grid_coord") ->

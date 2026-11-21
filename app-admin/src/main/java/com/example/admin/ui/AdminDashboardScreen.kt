@@ -53,7 +53,7 @@ fun AdminDashboardScreen(
     engine: CityEngine,
     isOffline: Boolean = false,
     offlineMessage: String? = null,
-    authorizedDeviceName: String? = null,
+    adminDisplayLabel: String? = null,
     onNavigateTab: (AdminTab) -> Unit,
     onOpenAddHouse: () -> Unit,
     modifier: Modifier = Modifier
@@ -79,7 +79,7 @@ fun AdminDashboardScreen(
         val bannerText = when {
             isOffline -> offlineMessage ?: stringResource(R.string.admin_offline_banner)
             snapshot.isLocalTestData -> stringResource(R.string.admin_local_mode_banner)
-            !authorizedDeviceName.isNullOrBlank() -> "$baseLiveBanner ($authorizedDeviceName)"
+            !adminDisplayLabel.isNullOrBlank() -> "$baseLiveBanner ($adminDisplayLabel)"
             else -> baseLiveBanner
         }
         val bannerTag = if (snapshot.isLocalTestData) "admin_local_mode_banner" else "admin_live_mode_banner"

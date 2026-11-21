@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Home
@@ -22,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -33,6 +35,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -56,7 +59,7 @@ import com.example.admin.R
 import com.example.cityengine.CityEngine
 import com.example.cityengine.model.House
 import com.example.core.data.model.AdminOperationResult
-import com.example.core.data.supabase.AdminDeviceAuthState
+import com.example.core.data.supabase.AdminAuthState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,8 +90,8 @@ fun AdminAppScreen(
     }
 
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        val authorizedState = uiState.authState as? AdminDeviceAuthState.Authorized
-        if (authorizedState == null) {
+        val authenticatedAdmin = uiState.authState as? AdminAuthState.AuthenticatedAdmin
+        if (authenticatedAdmin == null) {
             Scaffold(
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                 topBar = {
@@ -104,11 +107,10 @@ fun AdminAppScreen(
                     )
                 }
             ) { innerPadding ->
-                AdminDeviceActivationScreen(
+                AdminLoginScreen(
                     authState = uiState.authState,
-                    onActivateDevice = viewModel::activateDevice,
-                    onRetryVerification = viewModel::retryDeviceVerification,
-                    onBeginReEnrollment = viewModel::beginReEnrollmentFromRevoked,
+                    onSignIn = viewModel::signIn,
+                    onRetrySession = viewModel::retrySessionRestore,
                     modifier = Modifier.padding(innerPadding)
                 )
             }
@@ -129,6 +131,21 @@ fun AdminAppScreen(
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.testTag("admin_top_title")
                             )
+                        },
+                        actions = {
+                            if (uiState.requiresAuth) {
+                                IconButton(
+                                    onClick = viewModel::signOut,
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("admin_sign_out_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.Logout,
+                                        contentDescription = stringResource(R.string.admin_sign_out_label)
+                                    )
+                                }
+                            }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.surface,
@@ -207,7 +224,11 @@ fun AdminAppScreen(
                                     engine = engine,
                                     isOffline = uiState.isOffline,
                                     offlineMessage = uiState.offlineMessage,
-                                    authorizedDeviceName = if (uiState.requiresDeviceAuth) authorizedState.deviceName else null,
+                                    adminDisplayLabel = if (uiState.requiresAuth) {
+                                        authenticatedAdmin.email.ifBlank { authenticatedAdmin.displayName }
+                                    } else {
+                                        null
+                                    },
                                     onNavigateTab = { viewModel.selectTab(it) },
                                     onOpenAddHouse = {
                                         preselectedPlotForAdd = uiState.availablePlots.firstOrNull()?.id

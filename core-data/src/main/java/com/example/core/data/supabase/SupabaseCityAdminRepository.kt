@@ -43,17 +43,15 @@ import kotlinx.serialization.json.put
 
 /**
  * Production Supabase administration repository for :app-admin.
- * Executes all mutations via transactional PostgreSQL RPCs guarded by server-side is_admin() & RLS,
- * re-verifies active device trust before sensitive mutations, and keeps the admin scene synchronized
- * via Realtime notifications backed by device-authenticated PostgREST fetches.
+ * Executes all mutations via transactional PostgreSQL RPCs guarded by server-side is_admin() & RLS
+ * (verified via Supabase Auth JWT + profiles.role = 'ADMIN'), manages session verification/refresh
+ * before sensitive mutations, and keeps the admin scene synchronized via Realtime.
  */
 class SupabaseCityAdminRepository(
     private val config: SupabaseConfig,
-    private val authRepository: SupabaseDeviceAuthRepository,
+    private val authRepository: AdminAuthManager,
     private val clientProvider: () -> SupabaseClient? = {
-        SupabaseClientProvider.getOrCreateAdminClient(config) {
-            authRepository.currentDeviceHeadersOrNull()
-        }
+        SupabaseClientProvider.getOrCreateAdminClient(config)
     },
     private val connectivityChecker: ConnectivityChecker = AlwaysOnlineChecker,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -77,7 +75,7 @@ class SupabaseCityAdminRepository(
     init {
         scope.launch {
             authRepository.authState.collect { auth ->
-                if (auth is AdminDeviceAuthState.Authorized) {
+                if (auth is AdminAuthState.AuthenticatedAdmin) {
                     loadInitialAndSubscribe()
                 } else {
                     stopRealtime()
@@ -301,13 +299,13 @@ class SupabaseCityAdminRepository(
     }
 
     private suspend fun preflightSensitiveMutationGuard(): String? {
-        return authRepository.verifyActiveWithServerForMutation()
+        return authRepository.ensureAuthenticatedAdminForMutation()
     }
 
     private suspend fun handleMutationFailure(throwable: Throwable, fallback: String): AdminOperationResult.Failure {
         val translated = SupabaseErrorTranslator.toArabicMessage(throwable, fallback)
-        if (authRepository.isAuthorizationOrRevocationError(throwable)) {
-            authRepository.handleServerUnauthorizedOrRevoked(translated)
+        if (authRepository.isAuthorizationOrSessionError(throwable)) {
+            authRepository.handleAuthorizationOrSessionFailure(throwable, translated)
         }
         return AdminOperationResult.Failure(translated)
     }
@@ -318,8 +316,8 @@ class SupabaseCityAdminRepository(
             snapshotFlow.value = CityDataState.Error(configError)
             return
         }
-        if (!authRepository.isAuthorizedDevice()) {
-            snapshotFlow.value = CityDataState.Error("الجهاز غير معتمد للإدارة.")
+        if (!authRepository.isAuthenticatedAdmin()) {
+            snapshotFlow.value = CityDataState.Error("يجب تسجيل الدخول بحساب الإدارة أولًا.")
             return
         }
         if (!connectivityChecker.isOnline()) {
@@ -364,12 +362,12 @@ class SupabaseCityAdminRepository(
                 startRealtimeIfNeeded(client)
             }
         } catch (t: Throwable) {
-            if (authRepository.isAuthorizationOrRevocationError(t)) {
+            if (authRepository.isAuthorizationOrSessionError(t)) {
                 val msg = SupabaseErrorTranslator.toArabicMessage(
                     t,
-                    SupabaseDeviceAuthRepository.DEFAULT_REVOKED_REASON
+                    SupabaseAdminAuthRepository.DEFAULT_ACCESS_DENIED_MESSAGE
                 )
-                authRepository.handleServerUnauthorizedOrRevoked(msg)
+                authRepository.handleAuthorizationOrSessionFailure(t, msg)
                 snapshotFlow.value = CityDataState.Error(msg)
                 return
             }
@@ -434,7 +432,6 @@ class SupabaseCityAdminRepository(
                     val channel = client.channel("admin_city_realtime")
                     activeChannel = channel
 
-                    // Subscribe to RLS-compatible public tables and hydrate admin/private row via HTTP headers.
                     val publicHousesFlow = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
                         table = "house_public_details"
                     }

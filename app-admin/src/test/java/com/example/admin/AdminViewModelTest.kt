@@ -9,8 +9,13 @@ import com.example.core.data.local.LocalCityExplorerRepository
 import com.example.core.data.model.AdminHouseDraft
 import com.example.core.data.model.AdminOperationResult
 import com.example.core.data.model.CityDataState
+import com.example.core.data.supabase.AdminAuthManager
+import com.example.core.data.supabase.AdminAuthState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -36,6 +41,37 @@ class AdminViewModelTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    private class FakeAuthManager(
+        initialState: AdminAuthState = AdminAuthState.Unauthenticated()
+    ) : AdminAuthManager {
+        private val _authState = MutableStateFlow(initialState)
+        override val authState: StateFlow<AdminAuthState> = _authState.asStateFlow()
+
+        override fun isAuthenticatedAdmin(): Boolean =
+            _authState.value is AdminAuthState.AuthenticatedAdmin
+
+        override suspend fun restoreAndVerifySession() = Unit
+
+        override suspend fun signIn(email: String, password: String) {
+            if (email == "viewer@madina.test") {
+                _authState.value = AdminAuthState.AccessDenied(
+                    email = email,
+                    message = "تم رفض الدخول: هذا الحساب (VIEWER) لا يمتلك صلاحية الإدارة (ADMIN)."
+                )
+            } else {
+                _authState.value = AdminAuthState.AuthenticatedAdmin(
+                    userId = "uid_admin",
+                    email = email,
+                    displayName = "مدير المدينة"
+                )
+            }
+        }
+
+        override suspend fun signOut() {
+            _authState.value = AdminAuthState.Unauthenticated()
+        }
     }
 
     @Test
@@ -115,5 +151,31 @@ class AdminViewModelTest {
         // Explorer remains completely independent
         val explorerSnap = (explorerRepo.observeCitySnapshot().first() as CityDataState.Success).data
         assertEquals(12, explorerSnap.scene.houses.size)
+    }
+
+    @Test
+    fun `auth state gates snapshot clears on signOut and denies viewer account`() {
+        val fakeAuth = FakeAuthManager(AdminAuthState.Unauthenticated())
+        val viewModel = AdminViewModel(
+            repository = LocalCityAdminRepository(),
+            authRepository = fakeAuth
+        )
+
+        // Unauthenticated clears snapshot
+        assertTrue(viewModel.uiState.value.authState is AdminAuthState.Unauthenticated)
+        assertNull(viewModel.uiState.value.snapshot)
+
+        // VIEWER login results in AccessDenied and no snapshot exposure
+        viewModel.signIn("viewer@madina.test", "secret123")
+        assertTrue(viewModel.uiState.value.authState is AdminAuthState.AccessDenied)
+        assertNull(viewModel.uiState.value.snapshot)
+
+        // ADMIN login unlocks state, signOut clears again
+        viewModel.signIn("owner@madina.test", "secret123")
+        assertTrue(viewModel.uiState.value.authState is AdminAuthState.AuthenticatedAdmin)
+
+        viewModel.signOut()
+        assertTrue(viewModel.uiState.value.authState is AdminAuthState.Unauthenticated)
+        assertNull(viewModel.uiState.value.snapshot)
     }
 }

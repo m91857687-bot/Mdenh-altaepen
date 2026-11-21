@@ -4,15 +4,14 @@ import com.example.cityengine.world.StarterCityMap
 import com.example.core.data.model.AdminHouseDraft
 import com.example.core.data.model.AdminOperationResult
 import com.example.core.data.model.CityDataState
-import com.example.core.data.supabase.AdminDeviceAuthState
+import com.example.core.data.supabase.AdminAuthState
 import com.example.core.data.supabase.HouseAdminDto
 import com.example.core.data.supabase.HousePrivateDetailsDto
-import com.example.core.data.supabase.InMemoryAdminDeviceCredentialStore
+import com.example.core.data.supabase.SupabaseAdminAuthRepository
 import com.example.core.data.supabase.SupabaseCityAdminRepository
 import com.example.core.data.supabase.SupabaseCityExplorerRepository
 import com.example.core.data.supabase.SupabaseClientProvider
 import com.example.core.data.supabase.SupabaseConfig
-import com.example.core.data.supabase.SupabaseDeviceAuthRepository
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -31,8 +30,9 @@ import org.junit.Test
 
 /**
  * Live end-to-end integration tests against a real Supabase project.
- * Executed automatically when SUPABASE_URL and SUPABASE_ANON_KEY (plus optional one-time
- * SUPABASE_ADMIN_ACTIVATION_CODE) are provided in the environment; skipped cleanly otherwise.
+ * Executed automatically when SUPABASE_URL and SUPABASE_ANON_KEY (plus optional
+ * SUPABASE_ADMIN_EMAIL / SUPABASE_ADMIN_PASSWORD) are provided in the environment;
+ * skipped cleanly otherwise.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveSupabaseIntegrationTest {
@@ -99,25 +99,19 @@ class LiveSupabaseIntegrationTest {
     }
 
     @Test
-    fun `live unenrolled device cannot invoke admin mutations and activated device can read snapshot`() = runTest(dispatcher) {
+    fun `live unauthenticated caller cannot invoke admin mutations and signed in ADMIN can read snapshot`() = runTest(dispatcher) {
         val config = liveConfigOrSkip()
-        val activationCode = System.getenv("SUPABASE_ADMIN_ACTIVATION_CODE").orEmpty()
+        val adminEmail = System.getenv("SUPABASE_ADMIN_EMAIL").orEmpty()
+        val adminPassword = System.getenv("SUPABASE_ADMIN_PASSWORD").orEmpty()
 
         assumeTrue(
-            "Skipping live device activation test: SUPABASE_ADMIN_ACTIVATION_CODE env var not set.",
-            activationCode.isNotBlank()
+            "Skipping live Admin Auth test: SUPABASE_ADMIN_EMAIL / SUPABASE_ADMIN_PASSWORD env vars not set.",
+            adminEmail.isNotBlank() && adminPassword.isNotBlank()
         )
 
-        val store = InMemoryAdminDeviceCredentialStore()
-        lateinit var authRepo: SupabaseDeviceAuthRepository
-        val client = SupabaseClientProvider.createClient(
+        val client = SupabaseClientProvider.createClient(config, autoLoadFromStorage = false)
+        val authRepo = SupabaseAdminAuthRepository(
             config = config,
-            autoLoadFromStorage = false,
-            deviceHeaderProvider = { authRepo.currentDeviceHeadersOrNull() }
-        )
-        authRepo = SupabaseDeviceAuthRepository(
-            config = config,
-            credentialStore = store,
             clientProvider = { client }
         )
         val adminRepo = SupabaseCityAdminRepository(
@@ -128,9 +122,9 @@ class LiveSupabaseIntegrationTest {
             enableRealtime = false
         )
 
-        // 1. Unenrolled device is blocked from mutations
-        authRepo.verifyDeviceOnStartup()
-        assertTrue(authRepo.authState.value is AdminDeviceAuthState.Unenrolled)
+        // 1. Unauthenticated caller is blocked from mutations
+        authRepo.restoreAndVerifySession()
+        assertTrue(authRepo.authState.value is AdminAuthState.Unauthenticated)
         val deniedAdd = adminRepo.addHouse(
             AdminHouseDraft(
                 targetPlotId = "plot_12",
@@ -142,13 +136,16 @@ class LiveSupabaseIntegrationTest {
         )
         assertTrue(deniedAdd is AdminOperationResult.Failure)
 
-        // 2. Activating with server-issued one-time code authorizes device & loads live snapshot
-        authRepo.activateDevice(activationCode, "CI Live Test Device")
-        assertTrue(authRepo.authState.value is AdminDeviceAuthState.Authorized)
+        // 2. Signing in with ADMIN email/password verifies profiles.role='ADMIN' and loads live snapshot
+        authRepo.signIn(adminEmail, adminPassword)
+        assertTrue(authRepo.authState.value is AdminAuthState.AuthenticatedAdmin)
         val snapState = withTimeout(15_000) {
             adminRepo.observeAdminSnapshot().first { it !is CityDataState.Loading }
         }
         assertTrue(snapState is CityDataState.Success)
         assertFalse((snapState as CityDataState.Success).data.isLocalTestData)
+
+        authRepo.signOut()
+        assertTrue(authRepo.authState.value is AdminAuthState.Unauthenticated)
     }
 }

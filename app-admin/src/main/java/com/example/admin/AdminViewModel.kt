@@ -17,13 +17,12 @@ import com.example.core.data.model.AdminHouseDraft
 import com.example.core.data.model.AdminOperationResult
 import com.example.core.data.model.CityDataState
 import com.example.core.data.repository.CityAdminRepository
-import com.example.core.data.supabase.AdminDeviceAuthManager
-import com.example.core.data.supabase.AdminDeviceAuthState
+import com.example.core.data.supabase.AdminAuthManager
+import com.example.core.data.supabase.AdminAuthState
 import com.example.core.data.supabase.AndroidConnectivityChecker
-import com.example.core.data.supabase.KeystoreAdminDeviceCredentialStore
+import com.example.core.data.supabase.SupabaseAdminAuthRepository
 import com.example.core.data.supabase.SupabaseCityAdminRepository
 import com.example.core.data.supabase.SupabaseConfig
-import com.example.core.data.supabase.SupabaseDeviceAuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,11 +43,12 @@ enum class PlotFilter {
 }
 
 data class AdminUiState(
-    val authState: AdminDeviceAuthState = AdminDeviceAuthState.Authorized(
-        deviceId = "local-test",
-        deviceName = "بيئة الاختبار المحلية"
+    val authState: AdminAuthState = AdminAuthState.AuthenticatedAdmin(
+        userId = "local-test",
+        email = "local-test@madina.local",
+        displayName = "بيئة الاختبار المحلية"
     ),
-    val requiresDeviceAuth: Boolean = false,
+    val requiresAuth: Boolean = false,
     val activeTab: AdminTab = AdminTab.DASHBOARD,
     val isLoading: Boolean = true,
     val isEmpty: Boolean = false,
@@ -102,20 +102,21 @@ data class AdminUiState(
 
 class AdminViewModel(
     private val repository: CityAdminRepository = LocalCityAdminRepository(),
-    private val authRepository: AdminDeviceAuthManager? = null
+    private val authRepository: AdminAuthManager? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         AdminUiState(
             authState = if (authRepository != null) {
-                AdminDeviceAuthState.CheckingDevice
+                AdminAuthState.CheckingSession
             } else {
-                AdminDeviceAuthState.Authorized(
-                    deviceId = "local-test",
-                    deviceName = "بيئة الاختبار المحلية"
+                AdminAuthState.AuthenticatedAdmin(
+                    userId = "local-test",
+                    email = "local-test@madina.local",
+                    displayName = "بيئة الاختبار المحلية"
                 )
             },
-            requiresDeviceAuth = authRepository != null
+            requiresAuth = authRepository != null
         )
     )
     val uiState: StateFlow<AdminUiState> = _uiState.asStateFlow()
@@ -125,7 +126,7 @@ class AdminViewModel(
             viewModelScope.launch {
                 authRepository.authState.collect { auth ->
                     _uiState.update { current ->
-                        if (auth !is AdminDeviceAuthState.Authorized) {
+                        if (auth !is AdminAuthState.AuthenticatedAdmin) {
                             current.copy(
                                 authState = auth,
                                 snapshot = null,
@@ -139,7 +140,7 @@ class AdminViewModel(
                 }
             }
             viewModelScope.launch {
-                authRepository.verifyDeviceOnStartup()
+                authRepository.restoreAndVerifySession()
             }
         }
 
@@ -167,23 +168,39 @@ class AdminViewModel(
                         )
                     }
                     is CityDataState.Offline -> _uiState.update { current ->
+                        val allowSnapshot = !current.requiresAuth ||
+                            current.authState is AdminAuthState.AuthenticatedAdmin
                         current.copy(
                             isLoading = false,
                             isEmpty = false,
                             isOffline = true,
                             offlineMessage = dataState.message,
                             errorMessage = if (dataState.staleData == null) dataState.message else null,
-                            snapshot = dataState.staleData ?: current.snapshot
+                            snapshot = if (allowSnapshot) {
+                                dataState.staleData ?: current.snapshot
+                            } else {
+                                null
+                            }
                         )
                     }
                     is CityDataState.Success -> {
                         val snap = dataState.data
                         _uiState.update { current ->
-                            val keptHouseId = current.selectedHouseId?.takeIf { id ->
-                                snap.scene.houses.any { it.id == id }
+                            val allowSnapshot = !current.requiresAuth ||
+                                current.authState is AdminAuthState.AuthenticatedAdmin
+                            val keptHouseId = if (allowSnapshot) {
+                                current.selectedHouseId?.takeIf { id ->
+                                    snap.scene.houses.any { it.id == id }
+                                }
+                            } else {
+                                null
                             }
-                            val keptPlotId = current.selectedPlotId?.takeIf { id ->
-                                snap.plots.any { it.id == id }
+                            val keptPlotId = if (allowSnapshot) {
+                                current.selectedPlotId?.takeIf { id ->
+                                    snap.plots.any { it.id == id }
+                                }
+                            } else {
+                                null
                             }
                             current.copy(
                                 isLoading = false,
@@ -191,7 +208,7 @@ class AdminViewModel(
                                 isOffline = false,
                                 offlineMessage = null,
                                 errorMessage = null,
-                                snapshot = snap,
+                                snapshot = if (allowSnapshot) snap else null,
                                 selectedHouseId = keptHouseId,
                                 selectedPlotId = keptPlotId
                             )
@@ -202,29 +219,32 @@ class AdminViewModel(
         }
     }
 
-    fun activateDevice(activationCode: String, deviceName: String) {
+    fun signIn(email: String, password: String) {
         val authRepo = authRepository ?: return
         viewModelScope.launch {
-            authRepo.activateDevice(activationCode, deviceName)
+            authRepo.signIn(email, password)
         }
     }
 
-    fun retryDeviceVerification() {
+    fun signOut() {
         val authRepo = authRepository ?: return
         viewModelScope.launch {
-            authRepo.verifyDeviceOnStartup()
+            authRepo.signOut()
         }
     }
 
-    fun beginReEnrollmentFromRevoked() {
-        authRepository?.beginReEnrollmentFromRevoked()
+    fun retrySessionRestore() {
+        val authRepo = authRepository ?: return
+        viewModelScope.launch {
+            authRepo.restoreAndVerifySession()
+        }
     }
 
     fun retryLoad() {
         viewModelScope.launch {
             val authRepo = authRepository
-            if (authRepo != null && !authRepo.isAuthorizedDevice()) {
-                authRepo.verifyDeviceOnStartup()
+            if (authRepo != null && !authRepo.isAuthenticatedAdmin()) {
+                authRepo.restoreAndVerifySession()
             } else {
                 repository.refresh()
             }
@@ -361,10 +381,8 @@ class AdminViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val config = SupabaseConfig(supabaseUrl, supabaseAnonKey)
                 val connectivity = AndroidConnectivityChecker(context)
-                val credentialStore = KeystoreAdminDeviceCredentialStore(context)
-                val authRepo = SupabaseDeviceAuthRepository(
+                val authRepo = SupabaseAdminAuthRepository(
                     config = config,
-                    credentialStore = credentialStore,
                     connectivityChecker = connectivity
                 )
                 val adminRepo = SupabaseCityAdminRepository(
