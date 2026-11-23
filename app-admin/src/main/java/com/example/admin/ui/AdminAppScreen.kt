@@ -1,5 +1,7 @@
 package com.example.admin.ui
 
+import android.text.TextUtils
+import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,8 +19,11 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -59,7 +64,9 @@ import com.example.admin.R
 import com.example.cityengine.CityEngine
 import com.example.cityengine.model.House
 import com.example.core.data.model.AdminOperationResult
+import com.example.core.data.model.HouseRequest
 import com.example.core.data.supabase.AdminAuthState
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,6 +83,7 @@ fun AdminAppScreen(
     var colorHouse by remember { mutableStateOf<House?>(null) }
     var movingHouse by remember { mutableStateOf<House?>(null) }
     var deletingHouse by remember { mutableStateOf<House?>(null) }
+    var buildingForRequest by remember { mutableStateOf<HouseRequest?>(null) }
 
     BackHandler(enabled = uiState.activeTab != AdminTab.DASHBOARD) {
         viewModel.selectTab(AdminTab.DASHBOARD)
@@ -84,12 +92,25 @@ fun AdminAppScreen(
     LaunchedEffect(uiState.statusFeedback) {
         val msg = uiState.statusFeedback
         if (msg != null) {
+            snackbarHostState.currentSnackbarData?.dismiss()
             snackbarHostState.showSnackbar(msg)
             viewModel.clearFeedback()
         }
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    LaunchedEffect(uiState.activeTab, uiState.editor.pendingPlacement, uiState.hasInspectorSelection) {
+        if (uiState.activeTab == AdminTab.MAP && (uiState.editor.pendingPlacement != null || uiState.hasInspectorSelection)) {
+            snackbarHostState.currentSnackbarData?.dismiss()
+        }
+    }
+
+    val layoutDirection = if (TextUtils.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_RTL) {
+        LayoutDirection.Rtl
+    } else {
+        LayoutDirection.Ltr
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         val authenticatedAdmin = uiState.authState as? AdminAuthState.AuthenticatedAdmin
         if (authenticatedAdmin == null) {
             Scaffold(
@@ -160,7 +181,15 @@ fun AdminAppScreen(
                                 NavigationBarItem(
                                     selected = uiState.activeTab == tab,
                                     onClick = { viewModel.selectTab(tab) },
-                                    icon = { Icon(tabIcon(tab), contentDescription = null) },
+                                    icon = {
+                                        if (tab == AdminTab.REQUESTS && uiState.pendingRequestsCount > 0) {
+                                            BadgedBox(badge = { Badge { Text(uiState.pendingRequestsCount.toString()) } }) {
+                                                Icon(tabIcon(tab), contentDescription = null)
+                                            }
+                                        } else {
+                                            Icon(tabIcon(tab), contentDescription = null)
+                                        }
+                                    },
                                     label = { Text(stringResource(tabLabelRes(tab))) },
                                     modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
                                 )
@@ -180,7 +209,15 @@ fun AdminAppScreen(
                                 NavigationRailItem(
                                     selected = uiState.activeTab == tab,
                                     onClick = { viewModel.selectTab(tab) },
-                                    icon = { Icon(tabIcon(tab), contentDescription = null) },
+                                    icon = {
+                                        if (tab == AdminTab.REQUESTS && uiState.pendingRequestsCount > 0) {
+                                            BadgedBox(badge = { Badge { Text(uiState.pendingRequestsCount.toString()) } }) {
+                                                Icon(tabIcon(tab), contentDescription = null)
+                                            }
+                                        } else {
+                                            Icon(tabIcon(tab), contentDescription = null)
+                                        }
+                                    },
                                     label = { Text(stringResource(tabLabelRes(tab))) },
                                     modifier = Modifier.testTag("rail_tab_${tab.name.lowercase()}")
                                 )
@@ -198,7 +235,7 @@ fun AdminAppScreen(
                         }
                         uiState.isEmpty && snapshot == null -> {
                             AdminStatusRetryState(
-                                message = "لا توجد بيانات مدينة مهيأة على الخادم بعد.",
+                                message = stringResource(R.string.admin_empty_city),
                                 isOffline = false,
                                 onRetry = viewModel::retryLoad
                             )
@@ -229,6 +266,7 @@ fun AdminAppScreen(
                                     } else {
                                         null
                                     },
+                                    pendingRequestsCount = uiState.pendingRequestsCount,
                                     onNavigateTab = { viewModel.selectTab(it) },
                                     onOpenAddHouse = {
                                         preselectedPlotForAdd = uiState.availablePlots.firstOrNull()?.id
@@ -266,14 +304,24 @@ fun AdminAppScreen(
                                     onInspectHouse = { house -> viewModel.focusHouseOnMap(house.id) }
                                 )
 
+                                AdminTab.REQUESTS -> AdminRequestsScreen(
+                                    requests = uiState.filteredRequests,
+                                    activeFilter = uiState.requestFilter,
+                                    availablePlots = uiState.availablePlots,
+                                    onFilterChange = viewModel::setRequestFilter,
+                                    onUpdateStatus = { reqId, status, adminNotes, targetPlotId ->
+                                        viewModel.updateHouseRequestStatus(reqId, status, adminNotes, targetPlotId)
+                                    },
+                                    onApproveAndBuildHouse = { req ->
+                                        buildingForRequest = req
+                                    }
+                                )
+
                                 AdminTab.MAP -> AdminMapScreen(
                                     engine = engine,
                                     scene = scene,
-                                    selectedHouse = uiState.selectedHouse,
-                                    selectedPlot = uiState.selectedPlot,
-                                    onHouseTapped = viewModel::onMapHouseTapped,
-                                    onPlotTapped = viewModel::onMapPlotTapped,
-                                    onClearSelection = viewModel::clearMapSelection,
+                                    uiState = uiState,
+                                    viewModel = viewModel,
                                     onBuildOnPlot = { plot ->
                                         preselectedPlotForAdd = plot.id
                                         showAddDialog = true
@@ -357,6 +405,25 @@ fun AdminAppScreen(
                     }
                 )
             }
+
+            buildingForRequest?.let { req ->
+                AddOrEditHouseDialog(
+                    editingHouse = null,
+                    editingRecord = null,
+                    availablePlots = uiState.availablePlots,
+                    preselectedPlotId = req.targetPlotId ?: uiState.availablePlots.firstOrNull()?.id,
+                    prefilledOwnerName = req.applicantName,
+                    prefilledPhone = req.phone,
+                    prefilledEmail = req.email,
+                    prefilledNotes = req.notes,
+                    onDismiss = { buildingForRequest = null },
+                    onConfirm = { draft ->
+                        viewModel.assignRequestPlotAndBuildHouse(req.id, draft) { res ->
+                            if (res is AdminOperationResult.Success) buildingForRequest = null
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -392,7 +459,7 @@ private fun AdminStatusRetryState(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Button(onClick = onRetry, modifier = Modifier.testTag("admin_retry_button")) {
-                Text("إعادة المحاولة")
+                Text(stringResource(R.string.admin_retry))
             }
         }
     }
@@ -402,6 +469,7 @@ private fun tabIcon(tab: AdminTab) = when (tab) {
     AdminTab.DASHBOARD -> Icons.Rounded.Dashboard
     AdminTab.HOUSES -> Icons.Rounded.Home
     AdminTab.PLOTS -> Icons.Rounded.Landscape
+    AdminTab.REQUESTS -> Icons.Rounded.Inbox
     AdminTab.MAP -> Icons.Rounded.Map
 }
 
@@ -409,5 +477,6 @@ private fun tabLabelRes(tab: AdminTab): Int = when (tab) {
     AdminTab.DASHBOARD -> R.string.tab_dashboard
     AdminTab.HOUSES -> R.string.tab_houses
     AdminTab.PLOTS -> R.string.tab_plots
+    AdminTab.REQUESTS -> R.string.tab_requests
     AdminTab.MAP -> R.string.tab_map
 }

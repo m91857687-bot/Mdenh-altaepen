@@ -6,14 +6,17 @@ import com.example.cityengine.model.WorldPoint
 
 /**
  * Manages camera pan, focal-point pinch zoom, world bounds clamping, and screen/world transforms.
+ * Supports dynamic world expansion via [updateWorldBounds].
  * Reading [drawVersion] strictly inside Compose DrawScope updates frames without triggering recomposition.
  */
 class CameraController(
-    private val worldBounds: WorldBounds,
-    val minZoom: Float = 0.55f,
+    worldBounds: WorldBounds,
+    val minZoom: Float = 0.42f,
     val maxZoom: Float = 2.8f,
     initialZoom: Float = 1.05f
 ) {
+    var worldBounds: WorldBounds = worldBounds
+        private set
     var panX: Float = 0f
         private set
     var panY: Float = 0f
@@ -31,6 +34,14 @@ class CameraController(
 
     private var hasInitializedCenter = false
 
+    fun updateWorldBounds(newBounds: WorldBounds) {
+        if (worldBounds != newBounds) {
+            worldBounds = newBounds
+            clampToWorldBounds()
+            notifyDraw()
+        }
+    }
+
     fun updateViewport(width: Float, height: Float, initialCenterWorld: WorldPoint? = null) {
         if (width <= 0f || height <= 0f) return
         val changed = viewportWidth != width || viewportHeight != height
@@ -41,7 +52,7 @@ class CameraController(
             val fitScale = minOf(
                 width / ((worldBounds.maxX - worldBounds.minX).coerceAtLeast(1f) * 0.72f),
                 height / ((worldBounds.maxY - worldBounds.minY).coerceAtLeast(1f) * 0.85f)
-            ).coerceIn(0.75f, 1.35f)
+            ).coerceIn(0.65f, 1.35f)
             centerOnWorld(initialCenterWorld.x, initialCenterWorld.y, fitScale)
         } else if (changed) {
             clampToWorldBounds()

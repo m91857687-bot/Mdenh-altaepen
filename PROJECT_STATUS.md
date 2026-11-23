@@ -1,22 +1,22 @@
 # PROJECT_STATUS — الحالة الحالية للمشروع
 
-- **المرحلة الحالية:** المرحلة 4 — استعادة وإتمام نظام المصادقة التقليدي (`Supabase Auth` بالبريد وكلمة المرور + `profiles.role = 'ADMIN'`) — **مكتملة وجاهزة لاستكمال مهام المرحلة الخامسة**.
+- **المرحلة الحالية:** المرحلة الثالثة (**التكامل النهائي، تطبيق المشاهدة، الدول العربية الـ22، والاختبار والإطلاق**) — **مكتملة ومُختبرة محليًا على JVM وRobolectric وبناء APKs مزدوجة**.
 - **نسبة الإنجاز:**
-  - المرحلة 0 (التحليل والتوثيق): 100%
-  - المرحلة 1 (محرك المدينة الأيزومتري): 100%
-  - المرحلة 2 (تطبيق الاستكشاف + فصل `:core-city` و`:core-data`): 100%
-  - المرحلة 3 (تطبيق الإدارة المستقل `:app-admin` + مسار GitHub Actions للـ APK المزدوج): 100%
-  - المرحلة 4 (مخطط Supabase SQL + RLS + مصادقة Supabase Auth بدور `ADMIN` + مستودعات Supabase + Realtime + الحالات الشاملة): 100% (مُختبرة محليًا بالكامل عبر اختبارات Unit وRobolectric وMockEngine؛ والاختبار الحي يُشغَّل عند توفير `SUPABASE_URL` و`SUPABASE_ANON_KEY`)
-  - المرحلة 5 (الاختبار الشامل، تحسين الأداء، التحقق الأمني، وتجهيز الإطلاق): قيد الإعداد (بانتظار أمر الاستكمال بعد حسم المصادقة)
+  - المراحل 0–4 السابقة + حسم مصادقة `Supabase Auth (ADMIN)`: 100%.
+  - **City Builder — المرحلة الأولى (`:core-city` + `part_14`–`part_16`):** 100%.
+  - **City Builder — المرحلة الثانية (المحرر المرئي في `:app-admin` + التراجع الآمن):** 100%.
+  - **المرحلة الثالثة (التكامل النهائي، تطبيق المشاهدة، الدول العربية الـ22، طلبات المنازل، الذاكرة دون اتصال، والاختبارات):** 100% من الكود والترحيلات الأمامية والاختبارات المحلية.
 
-## ملخص حالة المرحلة الرابعة المعتمدة حاليًا
-- قاعدة البيانات في `supabase/sql/` (`part_01` إلى `part_13` مع الإبقاء على جميع الجداول والدوال والسياسات دون حذف):
-  - تدعم دالة `public.is_admin()` فحص `profiles.role = 'ADMIN'` مباشرة عبر `auth.uid()` لجميع سياسات RLS ودوال `admin_*`.
-  - أُضيف سكربت `part_13_assign_owner_admin.sql` لإسناد دور `ADMIN` لحساب المالك في `public.profiles` بأمان.
-- طبقة `:core-data`:
-  - `SupabaseAdminAuthRepository` يدير تسجيل الدخول بالبريد الإلكتروني وكلمة المرور، التحقق من `profiles.role = 'ADMIN'`، رفض حسابات `VIEWER`، استعادة الجلسة وتجديدها بأمان، والتعامل مع انتهاء الجلسة (`401`/`JWT expired`) وفقدان الصلاحيات (`403`/`42501`) وتسجيل الخروج.
-  - أُزيل `AdminDeviceCredentialStore` (`KeystoreAdminDeviceCredentialStore`) و`SupabaseDeviceAuthRepository` وترويستا `x-admin-device-*` من `SupabaseClientProvider`.
-  - استمرار جميع عمليات `SupabaseCityAdminRepository` (`addHouse`, `updateHouse`, `changeHouseColor`, `moveHouse`, `deleteHouse`) و`SupabaseCityExplorerRepository` و`Realtime` وحماية الخصوصية.
-- تطبيق `:app-admin`:
-  - واجهة `AdminLoginScreen` بالبريد الإلكتروني وكلمة المرور مع حظر لوحة التحكم لغير المصرح لهم وزر تسجيل الخروج في الشريط العلوي.
-  - جميع شاشات الإدارة (`Dashboard`, `Houses`, `Plots`, `Map`, وحوارات الإضافة/التعديل/اللون/النقل/الحذف) محفوظة وتعمل بالكامل.
+## ملخص مخرجات المرحلة الثالثة
+- **الدول العربية الـ 22 والأعلام الرسمية (`:core-city`):**
+  - 22 علمًا رسميًا بصيغة `VectorDrawable` (`flag_sa.xml`..`flag_km.xml` مع العلم السوري الأخضر/الأبيض/الأسود و3 نجمات حمراء) موحدة عبر `ArabCountriesRegistry`، مع عرضها في الرسم الإيزومتري (`FlagRenderer`, `HouseRenderer`, `EnvironmentPropRenderer` لعنصر `CITY_FLAG`) وفي واجهة Compose (`ArabFlagBadge`).
+- **طلبات بناء المنازل وتدفق الموافقة (`:app` -> `Supabase` -> `:app-admin`):**
+  - تقديم الطلبات من الزوار دون حساب في `HouseRequestDialog` عبر RPC `submit_house_request` (دون حقل عدد أفراد الأسرة).
+  - شاشة إدارة الطلبات `AdminRequestsScreen` (`AdminTab.REQUESTS`) بـ 7 حالات رسمية، وتحديث الحالة والملاحظات وتخصيص قطعة الأرض ذريًا عبر `admin_assign_request_plot_and_house` مع فتح نافذة بناء المنزل مباشرة بالبيانات المستلمة.
+- **الخصوصية، بيانات المباني، والذاكرة دون اتصال (`:core-data`, `:app`, `:app-admin`):**
+  - حقول `houseTitle` و`publicStatus` ومفتاح خصوصية اسم المالك `allowOwnerNamePublic` مع إخفاء عدد أفراد الأسرة في واجهة الزائر والاحتفاظ بآخر نسخة مصممة دون اتصال عبر `ExplorerSnapshotCache`.
+  - حقول `descriptionAr` و`publicInfoAr` للمباني العامة وعرض متصفح الأحياء في تطبيق المشاهدة.
+- **حالة الاختبارات والبناء المزدوج:**
+  - اختبارات `:core-city` (26/26)، `:core-data` (36/36 مع تخطي 2 لـ `LiveSupabaseIntegrationTest` دون مفاتيح حية)، `:app` (15/15)، `:app-admin` (16/16) — بإجمالي 0 إخفاقات، وتجميع ناجح لحزمتي `app-debug.apk` و`app-admin-debug.apk`.
+- **قاعدة البيانات الحية (`supabase/sql/`):**
+  - الترحيلات الأمامية `part_14`–`part_18` جاهزة للتنفيذ اليدوي بالترتيب عبر **Supabase SQL Editor**.

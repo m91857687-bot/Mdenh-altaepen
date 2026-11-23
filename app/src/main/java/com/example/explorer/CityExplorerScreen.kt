@@ -1,14 +1,15 @@
 package com.example.explorer
 
+import android.text.TextUtils
+import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -23,32 +24,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AddHome
 import androidx.compose.material.icons.rounded.CenterFocusStrong
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
-import androidx.compose.material.icons.rounded.Email
-import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocationCity
-import androidx.compose.material.icons.rounded.Phone
-import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -57,25 +52,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.cityengine.CityEngine
-import com.example.cityengine.model.CountryFlagStyle
+import com.example.cityengine.model.DistrictZone
+import com.example.cityengine.model.HouseDesignStyle
 import com.example.cityengine.ui.CityCanvas
-import com.example.core.data.model.PublicHouseDetails
+import java.util.Locale
 
 @Composable
 fun CityExplorerScreen(
@@ -84,11 +75,17 @@ fun CityExplorerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    BackHandler(enabled = uiState.selectedHouse != null) {
+    BackHandler(enabled = uiState.hasSelection && !uiState.houseRequestState.isOpen && !uiState.isDistrictsBrowserOpen) {
         viewModel.clearSelection()
     }
 
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+    val layoutDirection = if (TextUtils.getLayoutDirectionFromLocale(Locale.getDefault()) == View.LAYOUT_DIRECTION_RTL) {
+        LayoutDirection.Rtl
+    } else {
+        LayoutDirection.Ltr
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val isWideScreen = maxWidth >= 600.dp
             val scene = uiState.scene
@@ -98,37 +95,31 @@ fun CityExplorerScreen(
                     ExplorerLoadingState(modifier = Modifier.align(Alignment.Center))
                 }
                 uiState.isEmpty && scene == null -> {
-                    ExplorerEmptyState(
-                        onRetry = { viewModel.retryLoad() },
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    ExplorerEmptyState(onRetry = viewModel::retryLoad, modifier = Modifier.align(Alignment.Center))
                 }
                 uiState.isOffline && scene == null -> {
                     ExplorerOfflineState(
                         message = uiState.offlineMessage ?: stringResource(R.string.offline_stale_banner),
-                        onRetry = { viewModel.retryLoad() },
+                        onRetry = viewModel::retryLoad,
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
                 uiState.errorMessage != null && scene == null -> {
-                    ExplorerErrorState(
-                        message = uiState.errorMessage.orEmpty(),
-                        onRetry = { viewModel.retryLoad() },
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+                    ExplorerErrorState(message = uiState.errorMessage.orEmpty(), onRetry = viewModel::retryLoad, modifier = Modifier.align(Alignment.Center))
                 }
                 scene != null -> {
                     val engine = remember(scene.gridWidth, scene.gridHeight) {
-                        CityEngine(
-                            initialGridWidth = scene.gridWidth,
-                            initialGridHeight = scene.gridHeight
-                        )
+                        CityEngine(initialGridWidth = scene.gridWidth, initialGridHeight = scene.gridHeight)
                     }
 
                     CityCanvas(
                         engine = engine,
                         scene = scene,
-                        onHouseTapped = { tappedHouse -> viewModel.onHouseTapped(tappedHouse) },
+                        onHouseTapped = viewModel::onHouseTapped,
+                        onPlotTapped = viewModel::onPlotTapped,
+                        onBuildingTapped = viewModel::onBuildingTapped,
+                        onPropTapped = viewModel::onPropTapped,
+                        onRoadTapped = viewModel::onRoadTapped,
                         modifier = Modifier.fillMaxSize()
                     )
 
@@ -138,7 +129,6 @@ fun CityExplorerScreen(
                         stringResource(R.string.city_live_subtitle, scene.houses.size)
                     }
 
-                    // Top floating HUD header (designed to stay compact and leave room for future search slot)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -155,15 +145,35 @@ fun CityExplorerScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
+                        ExplorerQuickActionsBar(
+                            hasDistricts = scene.districts.isNotEmpty(),
+                            onRequestHouseClick = viewModel::openHouseRequestDialog,
+                            onOpenDistrictsBrowser = viewModel::openDistrictsBrowser
+                        )
+
+                        if (scene.districts.isNotEmpty()) {
+                            ExplorerDistrictsRow(
+                                districts = scene.districts,
+                                selectedDistrictId = uiState.selectedDistrict?.id,
+                                onSelectDistrict = { district ->
+                                    viewModel.onDistrictSelected(district)
+                                    val target = engine.projection.gridToWorld(
+                                        district.origin.x + district.widthCells * 0.5f,
+                                        district.origin.y + district.heightCells * 0.5f
+                                    )
+                                    engine.cameraController.centerOnWorld(target.x, target.y, targetZoom = 1.0f)
+                                }
+                            )
+                        }
+
                         if (uiState.isOffline) {
                             ExplorerOfflineBanner(
                                 message = uiState.offlineMessage ?: stringResource(R.string.offline_stale_banner),
-                                onRetry = { viewModel.retryLoad() }
+                                onRetry = viewModel::retryLoad
                             )
                         }
                     }
 
-                    // Bottom area: calm exploration hint or selected house info card
                     val cardAlignment = if (isWideScreen) Alignment.BottomStart else Alignment.BottomCenter
                     Box(
                         modifier = Modifier
@@ -173,11 +183,7 @@ fun CityExplorerScreen(
                             .padding(horizontal = 16.dp, vertical = 16.dp),
                         contentAlignment = cardAlignment
                     ) {
-                        AnimatedVisibility(
-                            visible = uiState.selectedHouse == null,
-                            enter = fadeIn(),
-                            exit = fadeOut()
-                        ) {
+                        AnimatedVisibility(visible = !uiState.hasSelection, enter = fadeIn(), exit = fadeOut()) {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
@@ -194,18 +200,67 @@ fun CityExplorerScreen(
                         }
 
                         AnimatedVisibility(
-                            visible = uiState.selectedHouse != null,
+                            visible = uiState.hasSelection,
                             enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
                             exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
                         ) {
-                            uiState.selectedHouse?.let { houseDetails ->
-                                SelectedHouseCard(
-                                    house = houseDetails,
-                                    isWideScreen = isWideScreen,
-                                    onDismiss = { viewModel.clearSelection() }
-                                )
+                            when {
+                                uiState.selectedHouse != null -> {
+                                    val details = uiState.selectedHouse!!
+                                    val houseModel = uiState.selectedHouseSceneModel()
+                                    val dist = houseModel?.coord?.let { uiState.districtForCoord(it) }
+                                    SelectedHouseCard(
+                                        house = details,
+                                        designStyle = houseModel?.designStyle ?: HouseDesignStyle.CLASSIC_HOME,
+                                        district = dist,
+                                        isWideScreen = isWideScreen,
+                                        onDismiss = viewModel::clearSelection
+                                    )
+                                }
+                                uiState.selectedBuilding != null -> {
+                                    val bld = uiState.selectedBuilding!!
+                                    val dist = uiState.districtById(bld.districtId) ?: uiState.districtForCoord(bld.coord)
+                                    SelectedPublicBuildingCard(bld, dist, isWideScreen, viewModel::clearSelection)
+                                }
+                                uiState.selectedProp != null -> {
+                                    val prop = uiState.selectedProp!!
+                                    SelectedPropCard(prop, uiState.districtForCoord(prop.coord), isWideScreen, viewModel::clearSelection)
+                                }
+                                uiState.selectedPlot != null -> {
+                                    val plot = uiState.selectedPlot!!
+                                    val dist = uiState.districtById(plot.districtId) ?: uiState.districtForCoord(plot.coord)
+                                    SelectedPlotCard(plot, dist, isWideScreen, viewModel::clearSelection)
+                                }
+                                uiState.selectedRoad != null || uiState.selectedRoadCoord != null -> {
+                                    val c = uiState.selectedRoad?.coord ?: uiState.selectedRoadCoord!!
+                                    SelectedRoadCard(uiState.selectedRoad, c, uiState.districtForCoord(c), isWideScreen, viewModel::clearSelection)
+                                }
+                                uiState.selectedDistrict != null -> {
+                                    SelectedDistrictCard(uiState.selectedDistrict!!, scene, isWideScreen, viewModel::clearSelection)
+                                }
                             }
                         }
+                    }
+
+                    HouseRequestDialog(
+                        state = uiState.houseRequestState,
+                        onDismiss = viewModel::closeHouseRequestDialog,
+                        onSubmit = viewModel::submitHouseRequest
+                    )
+
+                    if (uiState.isDistrictsBrowserOpen) {
+                        DistrictsBrowserDialog(
+                            scene = scene,
+                            onDismiss = viewModel::closeDistrictsBrowser,
+                            onSelectDistrict = { district ->
+                                viewModel.onDistrictSelected(district)
+                                val target = engine.projection.gridToWorld(
+                                    district.origin.x + district.widthCells * 0.5f,
+                                    district.origin.y + district.heightCells * 0.5f
+                                )
+                                engine.cameraController.centerOnWorld(target.x, target.y, targetZoom = 1.0f)
+                            }
+                        )
                     }
                 }
             }
@@ -214,16 +269,8 @@ fun CityExplorerScreen(
 }
 
 @Composable
-private fun ExplorerTopBar(
-    subtitle: String,
-    onRecenterClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+private fun ExplorerTopBar(subtitle: String, onRecenterClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
@@ -231,478 +278,131 @@ private fun ExplorerTopBar(
             shadowElevation = 4.dp,
             modifier = Modifier.testTag("explorer_header_pill")
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Home,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
+            Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(34.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-
         FilledTonalIconButton(
             onClick = onRecenterClick,
-            colors = IconButtonDefaults.filledTonalIconButtonColors(
-                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                contentColor = MaterialTheme.colorScheme.primary
-            ),
-            modifier = Modifier
-                .minimumInteractiveComponentSize()
-                .testTag("recenter_camera_button")
+            colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f), contentColor = MaterialTheme.colorScheme.primary),
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("recenter_camera_button")
         ) {
-            Icon(
-                imageVector = Icons.Rounded.CenterFocusStrong,
-                contentDescription = stringResource(R.string.recenter_camera_cd)
-            )
+            Icon(Icons.Rounded.CenterFocusStrong, contentDescription = stringResource(R.string.recenter_camera_cd))
         }
     }
 }
 
 @Composable
-private fun SelectedHouseCard(
-    house: PublicHouseDetails,
-    isWideScreen: Boolean,
-    onDismiss: () -> Unit
+private fun ExplorerQuickActionsBar(
+    hasDistricts: Boolean,
+    onRequestHouseClick: () -> Unit,
+    onOpenDistrictsBrowser: () -> Unit
 ) {
-    val maxCardWidth = if (isWideScreen) 420.dp else 560.dp
-    val familyDisplay = house.familyMembersCount?.let {
-        stringResource(R.string.house_family_count_format, it)
-    } ?: stringResource(R.string.value_unavailable)
-
-    ElevatedCard(
-        modifier = Modifier
-            .widthIn(max = maxCardWidth)
-            .fillMaxWidth()
-            .testTag("selected_house_card"),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 8.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    FlagPreviewBadge(flag = house.flag)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = house.ownerName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("house_owner_name")
-                        )
-                        if (house.isTestData) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier
-                                    .padding(top = 4.dp)
-                                    .testTag("test_data_badge")
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.phase1_test_badge),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier
-                        .minimumInteractiveComponentSize()
-                        .testTag("close_house_card_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.close_card_cd),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                InfoStatTile(
-                    icon = Icons.Rounded.Public,
-                    label = stringResource(R.string.house_country_label),
-                    value = house.countryName,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("house_country_value")
-                )
-                InfoStatTile(
-                    icon = Icons.Rounded.Groups,
-                    label = stringResource(R.string.house_family_label),
-                    value = familyDisplay,
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("house_family_value")
-                )
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Publishable additional info section (gracefully handles missing/unavailable info)
-            Surface(
+        Button(
+            onClick = onRequestHouseClick,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.minimumInteractiveComponentSize().testTag("open_house_request_button")
+        ) {
+            Icon(Icons.Rounded.AddHome, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.explorer_request_house_btn))
+        }
+        if (hasDistricts) {
+            FilledTonalButton(
+                onClick = onOpenDistrictsBrowser,
                 shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("house_public_info_section")
+                modifier = Modifier.minimumInteractiveComponentSize().testTag("open_districts_browser_button")
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Rounded.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = stringResource(R.string.house_public_info_title),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    if (house.hasAdditionalPublicInfo) {
-                        house.publicRole?.let { role ->
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                                modifier = Modifier.testTag("house_public_role")
-                            ) {
-                                Text(
-                                    text = role,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                        }
-                        house.publicAbout?.let { about ->
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = about,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.testTag("house_public_about")
-                            )
-                        }
-                    } else {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.house_no_public_info),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.testTag("house_no_public_info")
-                        )
-                    }
-                }
-            }
-
-            // Approved public contact section: strictly rendered ONLY if explicit consent exists
-            if (house.hasApprovedContact) {
-                Spacer(modifier = Modifier.height(10.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                Spacer(modifier = Modifier.height(10.dp))
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.testTag("house_approved_contact_section")
-                ) {
-                    Text(
-                        text = stringResource(R.string.house_approved_contact_title),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    house.approvedPhone?.let { phone ->
-                        ContactRow(icon = Icons.Rounded.Phone, value = phone)
-                    }
-                    house.approvedEmail?.let { email ->
-                        ContactRow(icon = Icons.Rounded.Email, value = email)
-                    }
-                }
+                Icon(Icons.Rounded.LocationCity, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.explorer_districts_btn))
             }
         }
     }
 }
 
 @Composable
-private fun ContactRow(icon: ImageVector, value: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-    }
-}
-
-@Composable
-private fun InfoStatTile(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.semantics(mergeDescendants = true) {},
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+private fun ExplorerDistrictsRow(districts: List<DistrictZone>, selectedDistrictId: String?, onSelectDistrict: (DistrictZone) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).testTag("explorer_districts_bar"),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+        districts.forEach { district ->
+            FilterChip(
+                selected = district.id == selectedDistrictId,
+                onClick = { onSelectDistrict(district) },
+                leadingIcon = {
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(Color(district.themeColorHex)))
+                },
+                label = { Text(district.nameAr) },
+                modifier = Modifier.testTag("explorer_district_${district.id}")
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FlagPreviewBadge(flag: CountryFlagStyle) {
-    Canvas(
-        modifier = Modifier
-            .size(width = 42.dp, height = 28.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
-    ) {
-        val colors = flag.stripeColors
-        if (colors.isEmpty()) return@Canvas
-        if (flag.isVerticalStripes && colors.size >= 2) {
-            val split = size.width * 0.36f
-            drawRect(Color(colors[0]), Offset.Zero, Size(split, size.height))
-            drawRect(Color(colors[1]), Offset(split, 0f), Size(size.width - split, size.height))
-        } else {
-            val bandH = size.height / colors.size
-            colors.forEachIndexed { idx, hex ->
-                drawRect(
-                    color = Color(hex),
-                    topLeft = Offset(0f, idx * bandH),
-                    size = Size(size.width, bandH + 0.5f)
-                )
-            }
         }
     }
 }
 
 @Composable
 private fun ExplorerLoadingState(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Column(modifier = modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.loading_city),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text(stringResource(R.string.loading_city), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun ExplorerErrorState(
-    message: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .padding(24.dp)
-            .testTag("explorer_error_state"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.error
-        )
+private fun ExplorerErrorState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(24.dp).testTag("explorer_error_state"), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.error)
         Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onRetry, modifier = Modifier.testTag("explorer_retry_button")) {
-            Text(text = stringResource(R.string.retry_load))
-        }
+        Button(onClick = onRetry, modifier = Modifier.testTag("explorer_retry_button")) { Text(stringResource(R.string.retry_load)) }
     }
 }
 
 @Composable
-private fun ExplorerEmptyState(
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .padding(24.dp)
-            .testTag("explorer_empty_state"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.LocationCity,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(48.dp)
-        )
+private fun ExplorerEmptyState(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(24.dp).testTag("explorer_empty_state"), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Rounded.LocationCity, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.empty_city_message),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text(stringResource(R.string.empty_city_message), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onRetry) {
-            Text(text = stringResource(R.string.retry_load))
-        }
+        Button(onClick = onRetry) { Text(stringResource(R.string.retry_load)) }
     }
 }
 
 @Composable
-private fun ExplorerOfflineState(
-    message: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .padding(24.dp)
-            .testTag("explorer_offline_state"),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = Icons.Rounded.CloudOff,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(48.dp)
-        )
+private fun ExplorerOfflineState(message: String, onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.padding(24.dp).testTag("explorer_offline_state"), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Rounded.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(48.dp))
         Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        Text(message, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
         Spacer(modifier = Modifier.height(12.dp))
-        Button(onClick = onRetry, modifier = Modifier.testTag("explorer_offline_retry_button")) {
-            Text(text = stringResource(R.string.retry_load))
-        }
+        Button(onClick = onRetry, modifier = Modifier.testTag("explorer_offline_retry_button")) { Text(stringResource(R.string.retry_load)) }
     }
 }
 
 @Composable
-private fun ExplorerOfflineBanner(
-    message: String,
-    onRetry: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f),
-        tonalElevation = 4.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("explorer_offline_banner")
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.CloudOff,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.size(18.dp)
-                )
+private fun ExplorerOfflineBanner(message: String, onRetry: () -> Unit) {
+    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.94f), tonalElevation = 4.dp, modifier = Modifier.fillMaxWidth().testTag("explorer_offline_banner")) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Icon(Icons.Rounded.CloudOff, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onErrorContainer
-                )
+                Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
             }
-            androidx.compose.material3.TextButton(onClick = onRetry) {
-                Text(stringResource(R.string.retry_load))
-            }
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.retry_load)) }
         }
     }
 }

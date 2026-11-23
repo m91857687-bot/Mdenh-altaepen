@@ -53,6 +53,17 @@ object SupabaseErrorTranslator {
                     msg.contains("صلاحيات المدير") ||
                     msg.contains("403") ->
                     "عملية مرفوضة: الحساب لا يمتلك صلاحيات المدير (ADMIN)."
+                msg.contains("PGRST202") ||
+                    msg.contains("PGRST205") ||
+                    msg.contains("Could not find the table", ignoreCase = true) ||
+                    msg.contains("Could not find the function", ignoreCase = true) ->
+                    "ميزة محرر المدينة تتطلب تطبيق ترقية قاعدة البيانات (part_14..16) على الخادم أولًا."
+                msg.contains("overlaps", ignoreCase = true) ->
+                    "تعارض مكاني: المساحة تتداخل مع عنصر أو طريق آخر على الخريطة."
+                msg.contains("exceeds map bounds", ignoreCase = true) ->
+                    "الإحداثيات تتجاوز حدود خريطة المدينة."
+                msg.contains("23505") || msg.contains("duplicate key", ignoreCase = true) ->
+                    "المعرّف أو الرمز مستخدم بالفعل لعنصر آخر."
                 msg.contains("uq_houses_plot_id") || msg.contains("مشغولة") || msg.contains("AVAILABLE") ->
                     "قطعة الأرض المحددة مشغولة أو غير متاحة."
                 msg.contains("uq_houses_grid_coord") ->

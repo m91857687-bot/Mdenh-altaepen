@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Qatar: White hoist, 9-point serrated Maroon fly -->
+    <path android:fillColor="#8D1B3D" android:pathData="M0,0 H120 V80 H0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 H34 L46,4.44 L34,8.89 L46,13.33 L34,17.78 L46,22.22 L34,26.67 L46,31.11 L34,35.56 L46,40 L34,44.44 L46,48.89 L34,53.33 L46,57.78 L34,62.22 L46,66.67 L34,71.11 L46,75.56 L34,80 H0 Z" />
+</vector>

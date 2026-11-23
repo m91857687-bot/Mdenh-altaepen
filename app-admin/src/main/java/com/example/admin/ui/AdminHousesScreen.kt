@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.admin.R
 import com.example.cityengine.model.House
+import com.example.cityengine.ui.ArabFlagBadge
 
 @Composable
 fun AdminHousesScreen(
@@ -96,7 +97,7 @@ fun AdminHousesScreen(
             if (!canAddMoreHouses) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "جميع قطع الأراضي الـ 12 مشغولة حاليًا.",
+                    text = stringResource(R.string.admin_all_plots_occupied),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -147,20 +148,34 @@ private fun AdminHouseItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    ArabFlagBadge(
+                        flag = house.flag,
+                        width = 38.dp,
+                        height = 26.dp,
+                        modifier = Modifier.testTag("admin_house_flag_${house.id}")
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
-                            .size(32.dp)
+                            .size(16.dp)
                             .clip(CircleShape)
                             .background(Color(house.palette.roofLeftHex))
-                            .border(1.5.dp, Color(house.palette.roofTrimHex), CircleShape)
+                            .border(1.dp, Color(house.palette.roofTrimHex), CircleShape)
                     )
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
                             text = house.ownerName,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+                        if (!house.houseTitle.isNullOrBlank()) {
+                            Text(
+                                text = house.houseTitle.orEmpty(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Text(
                             text = "${house.flag.countryName} • ${house.familyMembersCount} أفراد",
                             style = MaterialTheme.typography.bodyMedium,
@@ -193,7 +208,7 @@ private fun AdminHouseItemCard(
                     color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
                 ) {
                     Text(
-                        text = "مشغول • OCCUPIED",
+                        text = house.publicStatus?.takeIf { it.isNotBlank() } ?: stringResource(R.string.status_occupied),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)

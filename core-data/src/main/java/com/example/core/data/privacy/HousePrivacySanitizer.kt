@@ -42,10 +42,28 @@ object HousePrivacySanitizer {
             null
         }
 
+        val visibleOwnerName = if (record.allowOwnerNamePublic) {
+            house.ownerName.ifBlank { "غير متوفر" }
+        } else {
+            "غير معروض"
+        }
+
+        val houseTitle = if (record.allowPublicInfo) {
+            record.houseTitle?.trim()?.takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+
+        val publicStatus = if (record.allowPublicInfo) {
+            record.publicStatus?.trim()?.takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+
         return PublicHouseDetails(
             houseId = house.id,
             plotId = house.plotId,
-            ownerName = house.ownerName.ifBlank { "غير متوفر" },
+            ownerName = visibleOwnerName,
             countryCode = house.flag.countryCode,
             countryName = house.flag.countryName.ifBlank { "غير متوفر" },
             flag = house.flag,
@@ -54,7 +72,10 @@ object HousePrivacySanitizer {
             publicAbout = publicAbout,
             approvedPhone = approvedPhone,
             approvedEmail = approvedEmail,
-            isTestData = record.isTestData
+            isTestData = record.isTestData,
+            allowOwnerNamePublic = record.allowOwnerNamePublic,
+            houseTitle = houseTitle,
+            publicStatus = publicStatus
         )
     }
 }

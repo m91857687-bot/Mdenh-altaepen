@@ -1,6 +1,7 @@
 package com.example.cityengine.projection
 
 import com.example.cityengine.model.GridCoord
+import com.example.cityengine.model.GridFootprint
 import com.example.cityengine.model.GridPointF
 import com.example.cityengine.model.WorldBounds
 import com.example.cityengine.model.WorldPoint
@@ -34,6 +35,18 @@ class IsoProjection(
 
     fun tileCenterWorld(coord: GridCoord): WorldPoint = gridToWorld(coord.x + 0.5f, coord.y + 0.5f)
 
+    fun footprintCenterWorld(
+        coord: GridCoord,
+        widthCells: Int = 1,
+        heightCells: Int = 1
+    ): WorldPoint = gridToWorld(
+        coord.x + widthCells.coerceAtLeast(1) * 0.5f,
+        coord.y + heightCells.coerceAtLeast(1) * 0.5f
+    )
+
+    fun footprintCenterWorld(footprint: GridFootprint): WorldPoint =
+        footprintCenterWorld(footprint.origin, footprint.effectiveWidth(), footprint.effectiveHeight())
+
     fun worldToGrid(worldX: Float, worldY: Float): GridPointF {
         val gx = (worldX / halfTileWidth + worldY / halfTileHeight) * 0.5f
         val gy = (worldY / halfTileHeight - worldX / halfTileWidth) * 0.5f
@@ -48,20 +61,43 @@ class IsoProjection(
     /**
      * Returns the 4 diamond corners in clockwise order: Top, Right, Bottom, Left.
      */
-    fun tileCornersWorld(coord: GridCoord): Array<WorldPoint> {
-        val x = coord.x.toFloat()
-        val y = coord.y.toFloat()
+    fun tileCornersWorld(coord: GridCoord): Array<WorldPoint> =
+        footprintCornersWorld(coord, widthCells = 1, heightCells = 1)
+
+    /**
+     * Returns the 4 isometric diamond corners for an arbitrary WxH grid footprint: Top, Right, Bottom, Left.
+     */
+    fun footprintCornersWorld(
+        coord: GridCoord,
+        widthCells: Int = 1,
+        heightCells: Int = 1,
+        inset: Float = 0f
+    ): Array<WorldPoint> {
+        val x0 = coord.x.toFloat() + inset
+        val y0 = coord.y.toFloat() + inset
+        val x1 = (coord.x + widthCells.coerceAtLeast(1)).toFloat() - inset
+        val y1 = (coord.y + heightCells.coerceAtLeast(1)).toFloat() - inset
         return arrayOf(
-            gridToWorld(x, y),
-            gridToWorld(x + 1f, y),
-            gridToWorld(x + 1f, y + 1f),
-            gridToWorld(x, y + 1f)
+            gridToWorld(x0, y0),
+            gridToWorld(x1, y0),
+            gridToWorld(x1, y1),
+            gridToWorld(x0, y1)
         )
     }
 
     fun depthKey(coord: GridCoord): Int = (coord.x + coord.y) * 1024 + coord.x
 
-    fun computeWorldBounds(gridWidth: Int, gridHeight: Int, padding: Float = tileWidth): WorldBounds {
+    fun footprintDepthKey(
+        coord: GridCoord,
+        widthCells: Int = 1,
+        heightCells: Int = 1
+    ): Int {
+        val maxX = coord.x + widthCells.coerceAtLeast(1) - 1
+        val maxY = coord.y + heightCells.coerceAtLeast(1) - 1
+        return (maxX + maxY) * 1024 + maxX
+    }
+
+    fun computeWorldBounds(gridWidth: Int, gridHeight: Int, padding: Float = tileWidth * 1.5f): WorldBounds {
         val top = gridToWorld(0f, 0f)
         val right = gridToWorld(gridWidth.toFloat(), 0f)
         val bottom = gridToWorld(gridWidth.toFloat(), gridHeight.toFloat())

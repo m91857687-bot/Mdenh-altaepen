@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Libya: Red (1/4), Black (1/2), Green (1/4) + White crescent & star -->
+    <path android:fillColor="#E70013" android:pathData="M0,0 H120 V20 H0 Z" />
+    <path android:fillColor="#000000" android:pathData="M0,20 H120 V60 H0 Z" />
+    <path android:fillColor="#239E46" android:pathData="M0,60 H120 V80 H0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M65,30.5 A12,12 0 1,0 65,49.5 A10.2,10.2 0 1,1 65,30.5 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M67,34.5 L68.3,38.4 L72.4,38.4 L69.1,40.8 L70.3,44.7 L67,42.3 L63.7,44.7 L64.9,40.8 L61.6,38.4 L65.7,38.4 Z" />
+</vector>

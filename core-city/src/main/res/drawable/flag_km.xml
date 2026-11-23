@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Comoros: Yellow/White/Red/Blue horizontal + Green hoist triangle + White crescent & 4 stars -->
+    <path android:fillColor="#FFC61E" android:pathData="M0,0 H120 V20 H0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M0,20 H120 V40 H0 Z" />
+    <path android:fillColor="#CE1126" android:pathData="M0,40 H120 V60 H0 Z" />
+    <path android:fillColor="#3A75C4" android:pathData="M0,60 H120 V80 H0 Z" />
+    <path android:fillColor="#3D8E33" android:pathData="M0,0 L56,40 L0,80 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,25.5 A14.5,14.5 0 1,0 24,54.5 A12.5,12.5 0 1,1 24,25.5 Z" />
+    <!-- Four vertical white stars at x=25 -->
+    <path android:fillColor="#FFFFFF" android:pathData="M25,26.5 L25.8,29 L28.4,29 L26.3,30.5 L27.1,33 L25,31.5 L22.9,33 L23.7,30.5 L21.6,29 L24.2,29 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M25,33.5 L25.8,36 L28.4,36 L26.3,37.5 L27.1,40 L25,38.5 L22.9,40 L23.7,37.5 L21.6,36 L24.2,36 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M25,40.5 L25.8,43 L28.4,43 L26.3,44.5 L27.1,47 L25,45.5 L22.9,47 L23.7,44.5 L21.6,43 L24.2,43 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M25,47.5 L25.8,50 L28.4,50 L26.3,51.5 L27.1,54 L25,52.5 L22.9,54 L23.7,51.5 L21.6,50 L24.2,50 Z" />
+</vector>

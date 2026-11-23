@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Iraq: Red/White/Black horizontal + Green Kufic Takbir ("الله أكبر") -->
+    <path android:fillColor="#CE1126" android:pathData="M0,0 H120 V26.7 H0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M0,26.7 H120 V53.3 H0 Z" />
+    <path android:fillColor="#000000" android:pathData="M0,53.3 H120 V80 H0 Z" />
+    <!-- Geometric green Kufic calligraphy "الله أكبر" -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#007A3D"
+        android:strokeWidth="2.8"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter"
+        android:pathData="M24,46 H38 V34 M31,34 V46 M43,46 V34 H51 V46 M56,34 V46 M66,46 H80 M73,46 V35 L68,38 M84,34 V46 H92 V38 M96,34 V46" />
+</vector>

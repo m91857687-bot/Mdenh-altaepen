@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Algeria: Vertical Green/White + Red crescent & star -->
+    <path android:fillColor="#006633" android:pathData="M0,0 H60 V80 H0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M60,0 H120 V80 H60 Z" />
+    <path
+        android:fillColor="#D21034"
+        android:pathData="M71.5,25.5 A18.5,18.5 0 1,0 71.5,54.5 A15.6,15.6 0 1,1 71.5,25.5 Z" />
+    <path
+        android:fillColor="#D21034"
+        android:pathData="M67.5,31.5 L69.4,37.4 L75.6,37.4 L70.6,41 L72.5,46.9 L67.5,43.2 L62.5,46.9 L64.4,41 L59.4,37.4 L65.6,37.4 Z" />
+</vector>

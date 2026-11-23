@@ -1,5 +1,61 @@
 # CHANGELOG — سجل التغييرات
 
+## [0.7.0] - 2026-11-23 — المرحلة الثالثة: التكامل النهائي، تطبيق المشاهدة، الدول العربية الـ22، والطلبات
+### أُضيف
+- **منظومة الدول العربية الـ 22 والأعلام الرسمية (`:core-city`):**
+  - 22 أصل `VectorDrawable` في `core-city/src/main/res/drawable/flag_*.xml` لكافة دول جامعة الدول العربية، مع سجل موحد `ArabCountriesRegistry` ومكوّن `ArabFlagBadge`.
+  - دعم عنصر البيئة `CITY_FLAG` في شريط الأدوات والمحرر وبطاقات الفحص لعرض أعلام الدول داخل المدينة أو على المنازل، مع اختبار `ArabCountriesRegistryTest.kt`.
+- **طلبات بناء المنازل (`submit_house_request` -> `AdminRequestsScreen`):**
+  - نماذج الطلبات وحالاتها السبع `HouseRequestModels.kt`، وحوار `HouseRequestDialog` للزوار بدون حساب وبدون حقل عدد أفراد الأسرة.
+  - تبويب الطلبات الجديد `AdminRequestsScreen` (`AdminTab.REQUESTS`) في `:app-admin` لتصفية الطلبات وتحديث حالاتها وتخصيص قطعة الأرض وبناء المنزل مباشرة (`assignRequestPlotAndBuildHouse`).
+- **الذاكرة الدائمة دون اتصال وخصوصية المنازل والمباني:**
+  - `ExplorerSnapshotCache` لحفظ واسترجاع آخر لقطة معتمدة في تطبيق المشاهدة عند انقطاع الإنترنت.
+  - حقول `houseTitle`، و`publicStatus`، و`allowOwnerNamePublic` للمنازل، و`descriptionAr` و`publicInfoAr` للمباني العامة، ومتصفح الأحياء في تطبيق المشاهدة (`DistrictsBrowserDialog`).
+  - تفكيك `CityExplorerHouseCard.kt` و`AdminEditorPreviewBuilder.kt` لحفظ جميع ملفات المشروع تحت `500` سطر.
+- **ترحيلات Supabase الأمامية والاختبارات:**
+  - إضافة `part_17_phase3_house_requests_upgrade.sql` و`part_18_phase3_city_metadata_and_flags.sql` وتوسيع `Phase3RequestsAndCacheTest.kt` و`SqlSchemaVerificationTest.kt` واختبارات `:app` / `:app-admin`.
+
+### حُدّث
+- ضبط `SupabaseMapper` لمعالجة اسم المالك المحجوب (`"غير معروض"` أو النص الفارغ) بأمان وتحديث `AdminRpcPayloadBuilder` و`SupabaseCityAdminRepository`.
+- تهيئة مستودع Robolectric المحلي الشرطي في `app/build.gradle.kts` و`app-admin/build.gradle.kts` لتفادي فشل الجلب الشبكي (`HTTP 429`) عند توفر الحزم المخبأة محليًا.
+
+## [0.6.0] - 2026-11-23 — المرحلة الثانية (City Builder): المحرر المرئي التفاعلي والإدارة
+### أُضيف
+- **تفاعل المحرر داخل `:core-city`:** دعم `EditorPreviewOverlay` (`EditorPreviewKind`), ومستمعي التفاعل عبر الخريطة (`onBuildingTapped`, `onPropTapped`, `onRoadTapped`, `onGridCoordTapped`, `onGridCoordDragged`)، والتظليل المرئي للتحديد المتعدد والمعاينة الصالحة/المتعارضة، وإلغاء التكرار/الأخطاء المعمارية في `SpatialValidator` و`CityLayoutEditor`.
+- **قدرات التعديل والتراجع في `:core-data`:**
+  - نماذج مسودات البناء (`CityBuilderDataModels.kt` و`CityBuilderServerCapabilities`).
+  - مدير التراجع والإعادة الآمن من التعارضات `CityEditorHistoryManager` (`history/CityEditorHistoryManager.kt`).
+  - تفويضات التخزين والمزامنة المنفصلة (`LocalCityBuilderDelegate.kt`, `SupabaseCityBuilderDelegate.kt`, `SupabasePlotLayoutDelegate.kt`, `SupabaseAdminRealtimeSync.kt`) لحفظ جميع الملفات أقل من 500 سطر.
+  - اختبارات `CityEditorHistoryManagerTest`, `SupabaseCityBuilderTest`, و`SupabaseAdminAuthRepositoriesTest`.
+- **المحرر المرئي التفاعلي في `:app-admin`:**
+  - `AdminEditorState.kt` و`AdminEditorDelegate.kt` لتشغيل المعاينة الفورية، التأكيد قبل الحفظ، والربط مع التراجع/الإعادة.
+  - مكونات الخريطة والحوارات (`AdminMapEditorComponents.kt`, `AdminMapInspectorCard.kt`, `AdminBuilderDialogs.kt`, `AdminHouseActionDialogs.kt`) لدعم توسعة الشبكة، الأراضي (إنشاء، نقل، تحجيم، تدوير، تقسيم أفقي/عمودي، دمج، تفعيل/تعطيل، ربط الأحياء، حذف، والتحديد المتعدد الجماعي)، فرش الشوارع/الأرصفة/معابر المشاة/الحدائق/الساحات/المسح و`RoadSegment`، الأحياء، المباني العامة الـ 12، عناصر البيئة، ومصادر الإضاءة وإعدادات `DAY`/`SUNSET`/`NIGHT`.
+  - شاشة التحقق في الاختبارات `AdminBuilderRobolectricTest.kt`.
+- **الاستكشاف الموسّع (قراءة فقط) والتعريب:**
+  - إضافة شريط الأحياء وبطاقات الفحص القرائية في `:app` (`CityExplorerDetailCards.kt`) مع إخفاء أي أدوات تعديل أو بيانات خاصة.
+  - ملفات موارد اللغة الإنجليزية `app/src/main/res/values-en/strings.xml` و`app-admin/src/main/res/values-en/strings.xml` مع توجيه `LocalLayoutDirection` حسب اللغة (`RTL`/`LTR`).
+
+### حُدّث
+- تحديث `AdminAppScreen.kt` لإدارة تراكب الـ `Snackbar` مع لافتة المعاينة/بطاقة الفحص، وتحديث `AdminViewModel.kt`, `AdminMapScreen.kt`, `AdminHouseDialogs.kt`, و`AdminPlotsScreen.kt`.
+- تحديث `CityExplorerViewModel.kt` و`CityExplorerScreen.kt` وتوسيع `ExampleRobolectricTest.kt` و`CityExplorerViewModelTest.kt`.
+
+## [0.5.0] - 2026-11-22 — المرحلة الأولى (City Builder): تأسيس المدينة وتوسيع محركها
+### أُضيف
+- **منظومة الأصول الرسومية وذاكرة التخزين:** 12 أصل `VectorDrawable` نظيفًا في `core-city/src/main/res/drawable/asset_*.xml` + سجل `CityAssetRegistry` + مخزن `CityAssetCache` (ذاكرة LRU آمنة عند `context = null`).
+- **نماذج التخطيط المتقدم في `:core-city`:** ملف `CityBuilderModels.kt` (`BuildingRotation`, `DistrictZone`, `TileTextureVariant`, `RoadSegment`, `PublicBuildingType` بـ 12 نوعًا، `PublicBuilding`, `EnvironmentPropType` بـ 15 نوعًا، `EnvironmentProp`, `PropLayer`, `TimeOfDayPhase`, `LightingState`, `CityLightSource`, `GridFootprint`, `HouseDesignStyle` بـ 5 أنماط).
+- **أدوات الأداء والتوسع:** `SpatialGridIndex` (`SpatialIndex.kt`) و`ViewportCuller` + `LodTier` + `VisibleGridBounds` (`ViewportCuller.kt`) للتوسع السلس لآلاف العناصر.
+- **موسّع المدينة والتحرير البرمجي:** `CityLayoutEditor` + خريطة العرض الموسّعة `StarterCityMap.createExpandedShowcaseCity(phase)` (`26x26`، 3 أحياء، مبانٍ عامة، طرق متصلة، وزينة وإضاءة ليلية/غروب) مع الحفاظ التام على `createScene()` (`12x12`).
+- **طبقات الرسم المحسّنة:** `LightingRenderer` (`DAY`/`SUNSET`/`NIGHT`، ظلال، برك ضوء)، `PublicBuildingRenderer` (12 مبنى عامًا بأبعاد `WxH`)، `EnvironmentPropRenderer` (15 عنصر بيئة وزينة).
+- **ترحيلات Supabase الأمامية (`supabase/sql/`):** `part_14_city_builder_schema.sql` و`part_15_city_builder_constraints_indexes.sql` و`part_16_city_builder_functions_rls_realtime.sql` (أقل من 500 سطر لكل ملف، دون أي حذف أو مساس ببيانات المرحلة الرابعة) وتحديث `supabase/sql/README.md`.
+- **مساعد وحماية `:core-data`:** `AdminRpcPayloadBuilder.kt` وقواعد ProGuard/R8 في `core-data/consumer-rules.pro` للنماذج المتسلسلة، وتوثيق التعارضات في `KNOWN_ISSUES.md`.
+- **اختبارات جديدة ومحدّثة:** `CityBuilderEngineTest.kt` في `:core-city` وتوسيع `SqlSchemaVerificationTest.kt` و`SupabaseRepositoriesTest.kt` في `:core-data`.
+
+### حُدّث
+- ترقية `CityModels.kt` و`IsoProjection.kt` و`CameraController.kt` و`SpatialValidator.kt` و`PlotManager.kt` و`RoadRenderer.kt` و`HouseRenderer.kt` و`CityRenderer.kt` و`CityEngine.kt` و`CityCanvas.kt` لدعم التمدد الديناميكي > `12x12`، والأراضي متعددة الخلايا والدوران وحالة `UNAVAILABLE` والتقسيم/الدمج/تغيير الحجم، ومستويات المباني والإنارة.
+- تحديث `SupabaseDto.kt` و`SupabaseMapper.kt` و`SupabaseCityExplorerRepository.kt` و`SupabaseCityAdminRepository.kt` لقراءة بيانات City Builder الجديدة اختياريًا بأمان (`runCatching`) دون كسر التوافق مع مخطط المرحلة الرابعة قبل تنفيذ `part_14`–`part_16`.
+- مواءمة `AdminMapScreen.kt` و`AdminPlotsScreen.kt` في `:app-admin` مع حالة `PlotStatus.UNAVAILABLE` وأبعاد القطع المتعددة.
+- تحديث وثائق المشروع (`PROJECT_STRUCTURE.md`, `ARCHITECTURE.md`, `FEATURES_SPEC.md`, `DECISIONS.md`, `PROJECT_STATUS.md`, `NEXT_TASK.md`).
+
 ## [0.4.2] - 2026-11-21 — استعادة نظام مصادقة المرحلة الرابعة (Supabase Auth + دور ADMIN)
 ### أُعيد / عُدّل
 - استعادة `SupabaseAdminAuthRepository` (`AdminAuthManager` و`AdminAuthState`) لتسجيل الدخول بالبريد الإلكتروني وكلمة المرور عبر **Supabase Auth** مع التحقق من `public.profiles.role = 'ADMIN'`.

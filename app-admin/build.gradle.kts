@@ -59,6 +59,13 @@ android {
   testOptions {
     unitTests {
       isIncludeAndroidResources = true
+      all {
+        val localM2 = file("/home/appuser/.m2/repository")
+        if (localM2.exists()) {
+          it.systemProperty("robolectric.dependency.repo.url", localM2.toURI().toString())
+          it.systemProperty("robolectric.dependency.repo.id", "local-appuser-m2")
+        }
+      }
     }
   }
 }

@@ -20,7 +20,10 @@ data class HouseResidentSourceRecord(
     val publicAbout: String? = null,
     val allowPublicInfo: Boolean = true,
     val showFamilyCountPublicly: Boolean = true,
-    val isTestData: Boolean = true
+    val isTestData: Boolean = true,
+    val allowOwnerNamePublic: Boolean = house.allowOwnerNamePublic,
+    val houseTitle: String? = house.houseTitle,
+    val publicStatus: String? = house.publicStatus
 )
 
 /**
@@ -39,10 +42,16 @@ data class PublicHouseDetails(
     val publicAbout: String?,
     val approvedPhone: String?,
     val approvedEmail: String?,
-    val isTestData: Boolean
+    val isTestData: Boolean,
+    val allowOwnerNamePublic: Boolean = true,
+    val houseTitle: String? = null,
+    val publicStatus: String? = null
 ) {
+    val visibleOwnerName: String?
+        get() = if (allowOwnerNamePublic) ownerName.takeIf { it.isNotBlank() && it != "غير معروض" } else null
+
     val hasAdditionalPublicInfo: Boolean
-        get() = publicRole != null || publicAbout != null
+        get() = publicRole != null || publicAbout != null || publicStatus != null
 
     val hasApprovedContact: Boolean
         get() = approvedPhone != null || approvedEmail != null

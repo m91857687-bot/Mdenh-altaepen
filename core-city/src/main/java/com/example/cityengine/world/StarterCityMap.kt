@@ -1,22 +1,37 @@
 package com.example.cityengine.world
 
+import com.example.cityengine.assets.CityAssetRegistry
+import com.example.cityengine.model.BuildingRotation
+import com.example.cityengine.model.CityLightSource
+import com.example.cityengine.model.CityLightingState
 import com.example.cityengine.model.CitySceneState
 import com.example.cityengine.model.CityTileType
 import com.example.cityengine.model.CountryFlagStyle
+import com.example.cityengine.model.DistrictZone
+import com.example.cityengine.model.EnvironmentProp
+import com.example.cityengine.model.EnvironmentPropType
 import com.example.cityengine.model.GridCoord
 import com.example.cityengine.model.House
 import com.example.cityengine.model.HouseColorPreset
+import com.example.cityengine.model.HouseDesignStyle
 import com.example.cityengine.model.HousePalette
 import com.example.cityengine.model.LampPostItem
+import com.example.cityengine.model.LightSourceType
 import com.example.cityengine.model.Plot
 import com.example.cityengine.model.PlotStatus
+import com.example.cityengine.model.PropLayer
+import com.example.cityengine.model.PublicBuilding
+import com.example.cityengine.model.PublicBuildingType
+import com.example.cityengine.model.RoadSegment
+import com.example.cityengine.model.TileTextureVariant
+import com.example.cityengine.model.TimeOfDayPhase
 import com.example.cityengine.model.TreeItem
 
 /**
- * Generates the Phase 1 starter neighborhood for Madinat Al-Tayibin:
- * - 12x12 clean grid
- * - 12 designated plots with 12 equal-size test houses (explicitly test data for Phase 1)
- * - Connected asphalt streets, stone sidewalks, central green park, organized trees, and lamp posts
+ * Generates both:
+ * 1) [createScene]: the clean Phase-1 12x12 starter neighborhood (100% compatible with existing seed & tests).
+ * 2) [createExpandedShowcaseCity]: an expanded multi-district 26x26 showcase demonstrating civic buildings,
+ *    multi-cell plots, diverse residential styles & upgrade levels, environment props, and interactive lighting.
  */
 object StarterCityMap {
 
@@ -46,15 +61,12 @@ object StarterCityMap {
     )
 
     private val sidewalkCoords = setOf(
-        // Promenade around central park
         GridCoord(4, 4), GridCoord(5, 4), GridCoord(6, 4), GridCoord(7, 4),
         GridCoord(4, 5), GridCoord(7, 5),
         GridCoord(4, 6), GridCoord(7, 6),
         GridCoord(4, 7), GridCoord(5, 7), GridCoord(6, 7), GridCoord(7, 7),
-        // North & South avenue frontages
         GridCoord(1, 2), GridCoord(2, 2), GridCoord(4, 2), GridCoord(5, 2), GridCoord(6, 2), GridCoord(7, 2), GridCoord(9, 2), GridCoord(10, 2),
         GridCoord(1, 9), GridCoord(2, 9), GridCoord(4, 9), GridCoord(5, 9), GridCoord(6, 9), GridCoord(7, 9), GridCoord(9, 9), GridCoord(10, 9),
-        // West & East street frontages
         GridCoord(2, 4), GridCoord(2, 5), GridCoord(2, 6), GridCoord(2, 7),
         GridCoord(9, 4), GridCoord(9, 5), GridCoord(9, 6), GridCoord(9, 7)
     )
@@ -74,22 +86,14 @@ object StarterCityMap {
         HousePalette(0xFFF8F1F4, 0xFFE4D6DC, 0xFF9C4B68, 0xFF7A364E, 0xFF5C2639, 0xFF4D3428)
     )
 
-    private val testFlags = listOf(
-        CountryFlagStyle("SA", "المملكة العربية السعودية", listOf(0xFF167D46, 0xFFFFFFFF, 0xFF167D46)),
-        CountryFlagStyle("EG", "مصر", listOf(0xFFCE1126, 0xFFFFFFFF, 0xFF1E1E1E)),
-        CountryFlagStyle("JO", "الأردن", listOf(0xFF1E1E1E, 0xFFFFFFFF, 0xFF007A3D)),
-        CountryFlagStyle("MA", "المغرب", listOf(0xFFC1272D, 0xFF006233, 0xFFC1272D)),
-        CountryFlagStyle("AE", "الإمارات", listOf(0xFF00732F, 0xFFFFFFFF, 0xFF1E1E1E)),
-        CountryFlagStyle("KW", "الكويت", listOf(0xFF007A3D, 0xFFFFFFFF, 0xFFCE1126)),
-        CountryFlagStyle("QA", "قطر", listOf(0xFFFFFFFF, 0xFF8D1B3D), isVerticalStripes = true),
-        CountryFlagStyle("OM", "عُمان", listOf(0xFFFFFFFF, 0xFFDB161B, 0xFF008000)),
-        CountryFlagStyle("TN", "تونس", listOf(0xFFE70013, 0xFFFFFFFF, 0xFFE70013)),
-        CountryFlagStyle("LB", "لبنان", listOf(0xFFED1C24, 0xFFFFFFFF, 0xFFED1C24)),
-        CountryFlagStyle("BH", "البحرين", listOf(0xFFFFFFFF, 0xFFCE1126), isVerticalStripes = true),
-        CountryFlagStyle("PS", "فلسطين", listOf(0xFF1E1E1E, 0xFFFFFFFF, 0xFF007A3D))
+    private val starterFlagCodes = listOf(
+        "SA", "EG", "JO", "MA", "AE", "KW", "QA", "OM", "TN", "LB", "BH", "PS"
     )
 
-    // Explicit Phase 1 test resident data for verifying selection and info card display
+    private val testFlags: List<CountryFlagStyle> = starterFlagCodes.map { code ->
+        com.example.cityengine.model.ArabCountriesRegistry.resolveFlagStyle(code)
+    }
+
     private val testResidents = listOf(
         Triple("أبو عبدالله الحربي", 5, 0),
         Triple("م. طارق المنصور", 4, 1),
@@ -116,7 +120,7 @@ object StarterCityMap {
         HouseColorPreset("sandstone", "خشبي دافئ", testPalettes[7])
     )
 
-    val flagPresets: List<CountryFlagStyle> = testFlags
+    val flagPresets: List<CountryFlagStyle> = com.example.cityengine.model.ArabCountriesRegistry.allFlagStyles
 
     fun createScene(): CitySceneState {
         val plotCoords = plotSpecs.map { it.second }.toSet()
@@ -206,6 +210,130 @@ object StarterCityMap {
             trees = trees,
             lampPosts = lampPosts,
             selectedHouseId = null
+        )
+    }
+
+    /**
+     * Expanded 26x26 multi-district city preset demonstrating all Phase-1 engine capabilities:
+     * civic institutions, varied house designs & upgrade levels, multi-cell plots, textured plazas,
+     * environment props, and day/sunset/night lighting fixtures.
+     */
+    fun createExpandedShowcaseCity(phase: TimeOfDayPhase = TimeOfDayPhase.DAY): CitySceneState {
+        var scene = CityLayoutEditor.expandGrid(createScene(), newWidth = 26, newHeight = 26)
+
+        val districts = listOf(
+            DistrictZone("dist_heritage", "حي التراث", "D1", 0xFF3A7D5C, GridCoord(0, 0), 12, 12, "RESIDENTIAL"),
+            DistrictZone("dist_civic", "الحي الحكومي والمالي", "D2", 0xFF2D6A8E, GridCoord(13, 0), 13, 12, "CIVIC"),
+            DistrictZone("dist_commercial", "حي السوق والخدمات", "D3", 0xFFD49234, GridCoord(0, 13), 12, 13, "COMMERCIAL"),
+            DistrictZone("dist_garden_industry", "حي الحدائق والمناجم", "D4", 0xFF6B5B8C, GridCoord(13, 13), 13, 13, "MIXED")
+        )
+        districts.forEach { scene = CityLayoutEditor.addDistrict(scene, it) }
+
+        // Main boulevards extending across expanded 26x26 grid
+        val avenueCoords = buildList {
+            for (i in 0 until 26) {
+                add(GridCoord(12, i))
+                add(GridCoord(i, 12))
+                add(GridCoord(20, i))
+                add(GridCoord(i, 20))
+            }
+        }
+        scene = CityLayoutEditor.paintTiles(scene, avenueCoords, CityTileType.ROAD, TileTextureVariant.DEFAULT)
+
+        val civicPlazaCoords = buildList {
+            for (y in 2..10) {
+                for (x in 14..18) {
+                    add(GridCoord(x, y))
+                }
+            }
+        }
+        scene = CityLayoutEditor.paintTiles(scene, civicPlazaCoords, CityTileType.PLAZA, TileTextureVariant.CHECKER_STONE)
+
+        val farmlandCoords = buildList {
+            for (y in 22..24) {
+                for (x in 1..6) {
+                    add(GridCoord(x, y))
+                }
+            }
+        }
+        scene = CityLayoutEditor.paintTiles(scene, farmlandCoords, CityTileType.FARMLAND, TileTextureVariant.FURROWED)
+
+        // Add multi-cell plots in new districts
+        val extraPlots = listOf(
+            Plot("plot_13", GridCoord(2, 14), PlotStatus.AVAILABLE, widthCells = 2, heightCells = 1, districtId = "dist_commercial", textureVariant = TileTextureVariant.TILE_GRID),
+            Plot("plot_14", GridCoord(5, 14), PlotStatus.AVAILABLE, widthCells = 2, heightCells = 2, districtId = "dist_commercial", textureVariant = TileTextureVariant.CHECKER_STONE),
+            Plot("plot_15", GridCoord(14, 14), PlotStatus.UNAVAILABLE, widthCells = 2, heightCells = 1, districtId = "dist_garden_industry", textureVariant = TileTextureVariant.COBBLE)
+        )
+        for (p in extraPlots) {
+            scene = CityLayoutEditor.placePlot(scene, p).second
+        }
+
+        // Upgrade sample residential homes visually
+        val styledHouses = scene.houses.mapIndexed { idx, h ->
+            val style = HouseDesignStyle.entries[idx % HouseDesignStyle.entries.size]
+            val level = (idx % 3) + 1
+            h.copy(
+                designStyle = style,
+                upgradeLevel = level,
+                assetKey = CityAssetRegistry.keyFor(style)
+            )
+        }
+        scene = scene.copy(houses = styledHouses)
+
+        // Public civic, commercial & industrial buildings
+        val publicBuildings = listOf(
+            PublicBuilding("bld_palace", "القصر الرئاسي", PublicBuildingType.PRESIDENTIAL_PALACE, GridCoord(14, 2), 3, 3, upgradeLevel = 3, primaryColorHex = 0xFFF7EEDB, accentColorHex = 0xFFD4AF37),
+            PublicBuilding("bld_bank", "البنك المركزي", PublicBuildingType.CENTRAL_BANK, GridCoord(14, 6), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFE3EBF1, accentColorHex = 0xFF284B63),
+            PublicBuilding("bld_gov", "مبنى الحكومة", PublicBuildingType.GOVERNMENT_HALL, GridCoord(17, 6), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFE8EEF2, accentColorHex = 0xFF4A6FA5),
+            PublicBuilding("bld_muni", "دار البلدية", PublicBuildingType.MUNICIPALITY, GridCoord(22, 2), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFF4EDE0, accentColorHex = 0xFF3C6E71),
+            PublicBuilding("bld_hospital", "مستشفى المدينة", PublicBuildingType.HOSPITAL, GridCoord(22, 6), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFF8FAFC, accentColorHex = 0xFFC62828),
+            PublicBuilding("bld_school", "جامعة الطيبين", PublicBuildingType.SCHOOL_UNIVERSITY, GridCoord(1, 17), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFFFF4E3, accentColorHex = 0xFFC85A3A),
+            PublicBuilding("bld_mall", "السوق المركزي", PublicBuildingType.COMMERCIAL_MALL, GridCoord(8, 14), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFF2ECE1, accentColorHex = 0xFF2D6A4F),
+            PublicBuilding("bld_cafe", "مقهى المجلس", PublicBuildingType.RESTAURANT_CAFE, GridCoord(4, 17), 1, 1, upgradeLevel = 1, primaryColorHex = 0xFFF6EFE2, accentColorHex = 0xFFA44A3F),
+            PublicBuilding("bld_fuel", "محطة الطاقة والوقود", PublicBuildingType.FUEL_STATION, GridCoord(6, 17), 2, 1, upgradeLevel = 1, primaryColorHex = 0xFFE5E8EC, accentColorHex = 0xFFE07A5F),
+            PublicBuilding("bld_rec", "النادي الترفيهي", PublicBuildingType.RECREATION_CENTER, GridCoord(14, 16), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFFE7F2F0, accentColorHex = 0xFF2A9D8F),
+            PublicBuilding("bld_mine", "منجم الحجر والمعادن", PublicBuildingType.MINE_INDUSTRIAL, GridCoord(22, 15), 2, 2, upgradeLevel = 2, primaryColorHex = 0xFF8C7A6B, accentColorHex = 0xFFD99B26)
+        )
+        for (b in publicBuildings) {
+            scene = CityLayoutEditor.placePublicBuilding(scene, b).second
+        }
+
+        // Rich environmental props across plazas, boulevards & gardens
+        val props = listOf(
+            EnvironmentProp("prop_fountain_civic", EnvironmentPropType.FOUNTAIN, GridCoord(17, 4), scale = 1.15f, layer = PropLayer.STRUCTURE),
+            EnvironmentProp("prop_statue_civic", EnvironmentPropType.STATUE, GridCoord(18, 3), labelAr = "نُصب التأسيس", layer = PropLayer.STRUCTURE),
+            EnvironmentProp("prop_palm_01", EnvironmentPropType.PALM_TREE, GridCoord(13, 1), scale = 1.1f),
+            EnvironmentProp("prop_palm_02", EnvironmentPropType.PALM_TREE, GridCoord(13, 5), scale = 1.05f),
+            EnvironmentProp("prop_palm_03", EnvironmentPropType.PALM_TREE, GridCoord(13, 9), scale = 1.1f),
+            EnvironmentProp("prop_bench_01", EnvironmentPropType.BENCH, GridCoord(16, 5), rotation = BuildingRotation.DEG_90),
+            EnvironmentProp("prop_flower_01", EnvironmentPropType.FLOWER_BED, GridCoord(18, 2)),
+            EnvironmentProp("prop_gazebo_01", EnvironmentPropType.GARDEN_GAZEBO, GridCoord(17, 16)),
+            EnvironmentProp("prop_sign_01", EnvironmentPropType.ROAD_SIGN, GridCoord(11, 13), labelAr = "الحي الحكومي"),
+            EnvironmentProp("prop_gate_01", EnvironmentPropType.GATE_ARCH, GridCoord(13, 13)),
+            EnvironmentProp("prop_fence_01", EnvironmentPropType.FENCE_SEGMENT, GridCoord(21, 15)),
+            EnvironmentProp("prop_parking_01", EnvironmentPropType.PARKING_LOT, GridCoord(8, 17), widthCells = 2, heightCells = 1, layer = PropLayer.GROUND_OVERLAY),
+            EnvironmentProp("prop_crosswalk_01", EnvironmentPropType.CROSSWALK_MARKER, GridCoord(12, 5), layer = PropLayer.GROUND_OVERLAY)
+        )
+        for (prop in props) {
+            scene = CityLayoutEditor.placeEnvironmentProp(scene, prop).second
+        }
+
+        val roadSegments = listOf(
+            RoadSegment("road_main_ew", GridCoord(0, 12), widthCells = 26, heightCells = 1, lanes = 2, hasCrosswalk = true, streetNameAr = "جادة الطيبين الرئيسية"),
+            RoadSegment("road_main_ns", GridCoord(12, 0), widthCells = 1, heightCells = 26, lanes = 2, hasCrosswalk = true, streetNameAr = "شارع الرئاسة")
+        )
+
+        val extraLights = listOf(
+            CityLightSource("light_palace_facade", LightSourceType.FACADE_FLOOD, GridCoord(15, 3), colorHex = 0xFFFFDF8A, intensity = 1.25f, radiusWorld = 160f, directionDeg = 45f, coneAngleDeg = 95f),
+            CityLightSource("light_civic_fountain", LightSourceType.FOUNTAIN_GLOW, GridCoord(17, 4), colorHex = 0xFF7BE4FF, intensity = 1.0f, radiusWorld = 105f),
+            CityLightSource("light_hospital", LightSourceType.ENTRANCE_LIGHT, GridCoord(22, 7), colorHex = 0xFFFFB4B4, intensity = 0.9f, radiusWorld = 110f),
+            CityLightSource("light_mall", LightSourceType.SIGN_BACKLIGHT, GridCoord(8, 15), colorHex = 0xFFFFD166, intensity = 1.1f, radiusWorld = 120f)
+        )
+
+        return scene.copy(
+            roadSegments = roadSegments,
+            lights = extraLights,
+            lightingState = CityLightingState(phase = phase)
         )
     }
 }

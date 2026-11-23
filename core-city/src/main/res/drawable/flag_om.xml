@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Oman: White/Red/Green horizontal + Red vertical hoist band + White Khanjar & swords emblem -->
+    <path android:fillColor="#FFFFFF" android:pathData="M34,0 H120 V26.7 H34 Z" />
+    <path android:fillColor="#DB161B" android:pathData="M0,0 H34 V26.7 H120 V53.3 H34 V80 H0 Z" />
+    <path android:fillColor="#008000" android:pathData="M34,53.3 H120 V80 H34 Z" />
+    <!-- Oman Emblem (Khanjar & Crossed Swords) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.0"
+        android:strokeLineCap="round"
+        android:pathData="M9,22 L25,8 M25,22 L9,8 M12,15 H22" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15,7 H19 V16 L22,22 C18.5,24 14.5,23 13.5,20 L15.5,16 Z" />
+</vector>

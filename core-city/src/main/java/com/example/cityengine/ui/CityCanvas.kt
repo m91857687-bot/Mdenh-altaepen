@@ -14,22 +14,33 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import com.example.cityengine.CityEngine
+import com.example.cityengine.assets.CityAssetCache
 import com.example.cityengine.model.CitySceneState
+import com.example.cityengine.model.CityTileType
+import com.example.cityengine.model.EnvironmentProp
+import com.example.cityengine.model.GridCoord
 import com.example.cityengine.model.House
 import com.example.cityengine.model.Plot
+import com.example.cityengine.model.PublicBuilding
+import com.example.cityengine.model.RoadSegment
 import kotlin.math.PI
 import kotlin.math.hypot
 
 /**
  * High-performance Compose Canvas host for [CityEngine].
- * - Camera state and flag wave animation State<Float> are read ONLY inside the Canvas draw lambda,
+ * - Camera state and flag/fountain animation State<Float> are read ONLY inside the Canvas draw lambda,
  *   preventing Compose recompositions on pan, zoom, or animation ticks.
+ * - Uses bounded [CityAssetCache] for lazy VectorDrawable rendering.
  */
 @Composable
 fun CityCanvas(
@@ -37,8 +48,24 @@ fun CityCanvas(
     scene: CitySceneState,
     onHouseTapped: (House?) -> Unit,
     modifier: Modifier = Modifier,
-    onPlotTapped: ((Plot?) -> Unit)? = null
+    onPlotTapped: ((Plot?) -> Unit)? = null,
+    onBuildingTapped: ((PublicBuilding?) -> Unit)? = null,
+    onPropTapped: ((EnvironmentProp?) -> Unit)? = null,
+    onRoadTapped: ((RoadSegment?, GridCoord) -> Unit)? = null,
+    onGridCoordTapped: ((GridCoord) -> Unit)? = null,
+    onGridCoordDragged: ((GridCoord) -> Unit)? = null,
+    isDragPlacementActive: Boolean = false
 ) {
+    val context = LocalContext.current
+    val assetCache = remember(context) { CityAssetCache(context.applicationContext) }
+    DisposableEffect(assetCache) {
+        onDispose { assetCache.clear() }
+    }
+
+    LaunchedEffect(scene.gridWidth, scene.gridHeight) {
+        engine.syncSceneBounds(scene)
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "city_wave")
     val wavePhase = infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -55,13 +82,14 @@ fun CityCanvas(
             .fillMaxSize()
             .testTag("city_canvas")
             .onSizeChanged { size ->
+                engine.syncSceneBounds(scene)
                 engine.cameraController.updateViewport(
                     width = size.width.toFloat(),
                     height = size.height.toFloat(),
                     initialCenterWorld = engine.initialFocusWorld(scene)
                 )
             }
-            .pointerInput(scene) {
+            .pointerInput(scene, isDragPlacementActive) {
                 val touchSlop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val firstDown = awaitFirstDown(requireUnconsumed = false)
@@ -69,6 +97,13 @@ fun CityCanvas(
                     var totalMove = 0f
                     var isMultiTouch = false
                     var lastPosition = downPosition
+                    var lastDraggedCoord: GridCoord? = if (isDragPlacementActive && onGridCoordDragged != null) {
+                        engine.screenToGridCoord(downPosition.x, downPosition.y).also { coord ->
+                            onGridCoordDragged(coord)
+                        }
+                    } else {
+                        null
+                    }
 
                     do {
                         val event = awaitPointerEvent()
@@ -95,7 +130,14 @@ fun CityCanvas(
                             val dy = change.position.y - change.previousPosition.y
                             totalMove += hypot(dx, dy)
                             lastPosition = change.position
-                            if (totalMove > touchSlop && (dx != 0f || dy != 0f)) {
+                            if (isDragPlacementActive && onGridCoordDragged != null) {
+                                val hovered = engine.screenToGridCoord(lastPosition.x, lastPosition.y)
+                                if (hovered != lastDraggedCoord) {
+                                    lastDraggedCoord = hovered
+                                    onGridCoordDragged(hovered)
+                                }
+                                if (dx != 0f || dy != 0f) change.consume()
+                            } else if (totalMove > touchSlop && (dx != 0f || dy != 0f)) {
                                 engine.cameraController.panBy(dx, dy)
                                 change.consume()
                             }
@@ -105,6 +147,12 @@ fun CityCanvas(
                     } while (event.changes.any { it.pressed })
 
                     if (!isMultiTouch && totalMove <= touchSlop) {
+                        val tappedCoord = engine.screenToGridCoord(lastPosition.x, lastPosition.y)
+                        if (onGridCoordTapped != null) {
+                            onGridCoordTapped(tappedCoord)
+                            return@awaitEachGesture
+                        }
+
                         val tappedHouse = engine.findHouseAtScreenPoint(
                             screenX = lastPosition.x,
                             screenY = lastPosition.y,
@@ -112,15 +160,66 @@ fun CityCanvas(
                         )
                         if (tappedHouse != null) {
                             onHouseTapped(tappedHouse)
+                            onBuildingTapped?.invoke(null)
+                            onPropTapped?.invoke(null)
+                            onRoadTapped?.invoke(null, tappedCoord)
                         } else {
                             onHouseTapped(null)
-                            if (onPlotTapped != null) {
-                                val tappedPlot = engine.findPlotAtScreenPoint(
+                            val tappedBuilding = if (onBuildingTapped != null) {
+                                engine.findPublicBuildingAtScreenPoint(
                                     screenX = lastPosition.x,
                                     screenY = lastPosition.y,
                                     scene = scene
                                 )
-                                onPlotTapped(tappedPlot)
+                            } else {
+                                null
+                            }
+                            if (tappedBuilding != null) {
+                                onBuildingTapped?.invoke(tappedBuilding)
+                                onPlotTapped?.invoke(null)
+                                onPropTapped?.invoke(null)
+                                onRoadTapped?.invoke(null, tappedCoord)
+                            } else {
+                                onBuildingTapped?.invoke(null)
+                                val tappedProp = if (onPropTapped != null) {
+                                    engine.findEnvironmentPropAtScreenPoint(
+                                        screenX = lastPosition.x,
+                                        screenY = lastPosition.y,
+                                        scene = scene
+                                    )
+                                } else {
+                                    null
+                                }
+                                if (tappedProp != null) {
+                                    onPropTapped?.invoke(tappedProp)
+                                    onPlotTapped?.invoke(null)
+                                    onRoadTapped?.invoke(null, tappedCoord)
+                                } else {
+                                    onPropTapped?.invoke(null)
+                                    val tappedPlot = if (onPlotTapped != null) {
+                                        engine.findPlotAtScreenPoint(
+                                            screenX = lastPosition.x,
+                                            screenY = lastPosition.y,
+                                            scene = scene
+                                        )
+                                    } else {
+                                        null
+                                    }
+                                    if (tappedPlot != null) {
+                                        onPlotTapped?.invoke(tappedPlot)
+                                        onRoadTapped?.invoke(null, tappedCoord)
+                                    } else {
+                                        onPlotTapped?.invoke(null)
+                                        if (onRoadTapped != null) {
+                                            val seg = engine.findRoadSegmentAtCoord(tappedCoord, scene)
+                                            if (seg != null || scene.tiles[tappedCoord] == CityTileType.ROAD) {
+                                                onRoadTapped(seg, tappedCoord)
+                                            } else {
+                                                onRoadTapped(null, tappedCoord)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -135,7 +234,8 @@ fun CityCanvas(
             scope = this,
             scene = scene,
             camera = engine.cameraController,
-            timeSeconds = phaseRadians
+            timeSeconds = phaseRadians,
+            assetCache = assetCache
         )
     }
 }

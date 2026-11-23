@@ -76,9 +76,10 @@ class AdminRobolectricTest {
     }
 
     @Test
+    @Config(qualifiers = "ar")
     fun `admin app has distinct localized app name`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        assertEquals("إدارة الطيبين", context.getString(R.string.app_name))
+        assertEquals("مدينة الطيبين للإدارة", context.getString(R.string.app_name))
     }
 
     @Test
@@ -287,5 +288,48 @@ class AdminRobolectricTest {
 
         assertEquals("admin@madina.test", submittedEmail)
         assertEquals("MySecret#2026", submittedPassword)
+    }
+
+    @Test
+    @Config(qualifiers = "ar")
+    fun `requests tab supports status transitions and direct plot assignment to build house`() {
+        val viewModel = AdminViewModel(LocalCityAdminRepository())
+        val initialHouses = viewModel.uiState.value.snapshot!!.totalHouses
+
+        composeTestRule.setContent {
+            AdminTheme {
+                AdminAppScreen(viewModel = viewModel)
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithTag("nav_tab_requests").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("admin_requests_list").assertIsDisplayed()
+
+        // Update first request status
+        composeTestRule.onNodeWithTag("request_update_btn_req_local_01").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("dialog_status_under_review").performClick()
+        composeTestRule.onNodeWithTag("confirm_request_status_button").performClick()
+        composeTestRule.waitForIdle()
+
+        assertEquals(
+            com.example.core.data.model.HouseRequestStatus.UNDER_REVIEW,
+            viewModel.uiState.value.snapshot!!.houseRequests.first { it.id == "req_local_01" }.status
+        )
+
+        // Approve & build house directly from req_local_01 with UAE flag
+        composeTestRule.onNodeWithTag("request_build_btn_req_local_01").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("pick_flag_AE").performScrollTo().performClick()
+        composeTestRule.onNodeWithTag("confirm_house_dialog_button").performClick()
+        composeTestRule.waitForIdle()
+
+        assertEquals(initialHouses + 1, viewModel.uiState.value.snapshot!!.totalHouses)
+        assertEquals(
+            com.example.core.data.model.HouseRequestStatus.COMPLETED,
+            viewModel.uiState.value.snapshot!!.houseRequests.first { it.id == "req_local_01" }.status
+        )
     }
 }

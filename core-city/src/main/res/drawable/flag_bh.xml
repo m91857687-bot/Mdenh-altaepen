@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Bahrain: White hoist, 5-point serrated red fly -->
+    <path android:fillColor="#CE1126" android:pathData="M0,0 H120 V80 H0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 H30 L45,8 L30,16 L45,24 L30,32 L45,40 L30,48 L45,56 L30,64 L45,72 L30,80 H0 Z" />
+</vector>

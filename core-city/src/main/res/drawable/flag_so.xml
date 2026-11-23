@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Somalia: Sky blue field + White 5-pointed star -->
+    <path android:fillColor="#4189DD" android:pathData="M0,0 H120 V80 H0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,21 L64.4,34.4 L78.5,34.4 L67.1,42.7 L71.4,56.1 L60,47.8 L48.6,56.1 L52.9,42.7 L41.5,34.4 L55.6,34.4 Z" />
+</vector>

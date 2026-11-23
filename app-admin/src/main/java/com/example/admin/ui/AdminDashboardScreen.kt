@@ -21,6 +21,7 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Domain
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material.icons.rounded.Landscape
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -54,6 +55,7 @@ fun AdminDashboardScreen(
     isOffline: Boolean = false,
     offlineMessage: String? = null,
     adminDisplayLabel: String? = null,
+    pendingRequestsCount: Int = 0,
     onNavigateTab: (AdminTab) -> Unit,
     onOpenAddHouse: () -> Unit,
     modifier: Modifier = Modifier
@@ -110,6 +112,32 @@ fun AdminDashboardScreen(
             }
         }
 
+        if (!snapshot.isLocalTestData && !snapshot.builderCapabilities.builderTablesAvailable) {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth().testTag("dashboard_degraded_server_banner")
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.admin_builder_degraded_banner),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+        }
+
         // 2x2 Summary KPI cards (explicitly local test values)
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -155,9 +183,28 @@ fun AdminDashboardScreen(
             )
         }
 
-        // Shortcuts for Houses & Plots
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+            modifier = Modifier.fillMaxWidth().testTag("dashboard_builder_summary")
+        ) {
+            Text(
+                text = stringResource(
+                    R.string.stat_districts_buildings_format,
+                    snapshot.scene.districts.size,
+                    snapshot.scene.publicBuildings.size,
+                    snapshot.scene.gridWidth,
+                    snapshot.scene.gridHeight
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+            )
+        }
+
+        // Shortcuts for Houses, Plots & City Builder
         Text(
-            text = "اختصارات الإدارة",
+            text = stringResource(R.string.dashboard_shortcuts_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold
         )
@@ -174,7 +221,7 @@ fun AdminDashboardScreen(
             ) {
                 Icon(Icons.Rounded.AddHome, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("بناء بيت")
+                Text(stringResource(R.string.dashboard_build_house))
             }
             FilledTonalButton(
                 onClick = { onNavigateTab(AdminTab.HOUSES) },
@@ -184,7 +231,7 @@ fun AdminDashboardScreen(
             ) {
                 Icon(Icons.Rounded.Home, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("إدارة البيوت")
+                Text(stringResource(R.string.dashboard_manage_houses))
             }
         }
         Row(
@@ -199,7 +246,7 @@ fun AdminDashboardScreen(
             ) {
                 Icon(Icons.Rounded.Landscape, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("إدارة الأراضي")
+                Text(stringResource(R.string.dashboard_manage_plots))
             }
             FilledTonalButton(
                 onClick = { onNavigateTab(AdminTab.MAP) },
@@ -209,8 +256,18 @@ fun AdminDashboardScreen(
             ) {
                 Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("معاينة الخريطة")
+                Text(stringResource(R.string.dashboard_open_editor))
             }
+        }
+        FilledTonalButton(
+            onClick = { onNavigateTab(AdminTab.REQUESTS) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dashboard_requests_button")
+        ) {
+            Icon(Icons.Rounded.Inbox, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(stringResource(R.string.dashboard_manage_requests, pendingRequestsCount))
         }
 
         // Interactive live city preview powered by shared :core-city
@@ -228,12 +285,12 @@ fun AdminDashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "معاينة تفاعلية للمدينة",
+                        text = stringResource(R.string.dashboard_city_preview_title),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     FilledTonalButton(onClick = { onNavigateTab(AdminTab.MAP) }) {
-                        Text("تكبير")
+                        Text(stringResource(R.string.dashboard_zoom_in))
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))

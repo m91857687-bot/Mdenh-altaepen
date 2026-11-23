@@ -21,6 +21,13 @@
 | 11 | `part_11_seed_data.sql` | تعبئة تخطيط المدينة والأراضي الـ 12 وبيوت المرحلة الأولى الـ 12 دون تكرار | `part_03`, `part_04`, `part_06`, `part_08` |
 | 12 | `part_12_device_auth_functions.sql` | دوال قديمة محفوظة في قاعدة البيانات دون استدعاء من التطبيق | `part_01`, `part_02`, `part_09` |
 | 13 | `part_13_assign_owner_admin.sql` | ترقية حساب المالك المُسجَّل في `auth.users` إلى دور `ADMIN` في `public.profiles` | `part_02` |
+| 14 | `part_14_city_builder_schema.sql` | توسيع التخطيط والأراضي والمنازل وإنشاء جداول الأحياء والمباني العامة والزينة والإضاءة (Forward-Only) | `part_03`, `part_04` |
+| 15 | `part_15_city_builder_constraints_indexes.sql` | مشغّلات منع التداخل متعدد الخلايا وفهارس الأداء المكاني للمدن الكبيرة | `part_06`, `part_14` |
+| 16 | `part_16_city_builder_functions_rls_realtime.sql` | تحديث مزامنة العرض العام ودوال الإدارة الجديدة وسياسات RLS وRealtime للجداول الجديدة | `part_08`, `part_09`, `part_10`, `part_14`, `part_15` |
+| 17 | `part_17_phase3_house_requests_upgrade.sql` | ترقية جدول `house_requests` لحالات المراجعة الـ7، دالة `submit_house_request` الآمنة للزوار، دوال الإدارة `admin_update_house_request_status` و`admin_assign_request_plot_and_house`، وبث Realtime للطلبات | `part_05`, `part_08`, `part_09`, `part_10` |
+| 18 | `part_18_phase3_city_metadata_and_flags.sql` | إضافة `description_ar` و`public_info_ar` للمباني العامة، و`house_title` و`public_status` و`allow_owner_name_public` للبيوت والعرض العام مع دالة `admin_set_house_public_visibility` | `part_04`, `part_08`, `part_14`, `part_16` |
+
+> **تنبيه مهم:** الملفات `part_14` إلى `part_18` هي ترحيلات أمامية آمنة (Forward-Only) لا تحذف الجداول أو البيانات القائمة، وتظل متوافقة تمامًا مع المراحل السابقة إذا لم تُنفَّذ بعد (يستخدم التطبيق قراءة اختيارية آمنة).
 
 ## نظام المصادقة المعتمد لتطبيق الإدارة (`:app-admin`)
 

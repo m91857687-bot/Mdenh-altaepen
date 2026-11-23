@@ -21,7 +21,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -40,13 +39,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.example.admin.R
+import com.example.cityengine.model.ArabCountriesRegistry
 import com.example.cityengine.model.House
 import com.example.cityengine.model.HousePalette
 import com.example.cityengine.model.Plot
-import com.example.cityengine.model.PlotStatus
+import com.example.cityengine.ui.ArabFlagBadge
 import com.example.cityengine.world.StarterCityMap
 import com.example.core.data.model.AdminHouseDraft
 import com.example.core.data.model.HouseResidentSourceRecord
@@ -57,6 +59,10 @@ fun AddOrEditHouseDialog(
     editingRecord: HouseResidentSourceRecord?,
     availablePlots: List<Plot>,
     preselectedPlotId: String?,
+    prefilledOwnerName: String? = null,
+    prefilledPhone: String? = null,
+    prefilledEmail: String? = null,
+    prefilledNotes: String? = null,
     onDismiss: () -> Unit,
     onConfirm: (AdminHouseDraft) -> Unit
 ) {
@@ -66,12 +72,23 @@ fun AddOrEditHouseDialog(
         ?: availablePlots.firstOrNull()?.id.orEmpty()
 
     var selectedPlotId by remember(initialPlotId) { mutableStateOf(initialPlotId) }
-    var ownerName by remember(editingHouse) { mutableStateOf(editingHouse?.ownerName.orEmpty()) }
+    var ownerName by remember(editingHouse, prefilledOwnerName) {
+        mutableStateOf(editingHouse?.ownerName ?: prefilledOwnerName.orEmpty())
+    }
     var familyCountText by remember(editingHouse) {
         mutableStateOf((editingHouse?.familyMembersCount ?: 4).toString())
     }
+    var houseTitle by remember(editingHouse) {
+        mutableStateOf(editingHouse?.houseTitle.orEmpty())
+    }
+    var publicStatus by remember(editingHouse) {
+        mutableStateOf(editingHouse?.publicStatus.orEmpty())
+    }
+    var allowOwnerNamePublic by remember(editingHouse) {
+        mutableStateOf(editingHouse?.allowOwnerNamePublic ?: true)
+    }
     var selectedFlag by remember(editingHouse) {
-        mutableStateOf(editingHouse?.flag ?: StarterCityMap.flagPresets.first())
+        mutableStateOf(editingHouse?.flag ?: ArabCountriesRegistry.allCountries.first().flagStyle)
     }
     var selectedPalette by remember(editingHouse) {
         mutableStateOf(editingHouse?.palette ?: StarterCityMap.palettePresets.first().palette)
@@ -82,17 +99,17 @@ fun AddOrEditHouseDialog(
     var publicAbout by remember(editingRecord) {
         mutableStateOf(editingRecord?.publicAbout.orEmpty())
     }
-    var phoneNumber by remember(editingRecord) {
-        mutableStateOf(editingRecord?.rawPhoneNumber.orEmpty())
+    var phoneNumber by remember(editingRecord, prefilledPhone) {
+        mutableStateOf(editingRecord?.rawPhoneNumber ?: prefilledPhone.orEmpty())
     }
-    var email by remember(editingRecord) {
-        mutableStateOf(editingRecord?.rawEmail.orEmpty())
+    var email by remember(editingRecord, prefilledEmail) {
+        mutableStateOf(editingRecord?.rawEmail ?: prefilledEmail.orEmpty())
     }
     var additionalPhone by remember(editingRecord) {
         mutableStateOf(editingRecord?.rawAdditionalPhone.orEmpty())
     }
-    var privateNotes by remember(editingRecord) {
-        mutableStateOf(editingRecord?.privateNotes.orEmpty())
+    var privateNotes by remember(editingRecord, prefilledNotes) {
+        mutableStateOf(editingRecord?.privateNotes ?: prefilledNotes.orEmpty())
     }
     var allowPhonePublic by remember(editingRecord) {
         mutableStateOf(editingRecord?.allowPhonePublic ?: false)
@@ -176,6 +193,43 @@ fun AddOrEditHouseDialog(
                         .testTag("input_family_count")
                 )
 
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.house_allow_owner_name_public),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = allowOwnerNamePublic,
+                        onCheckedChange = { allowOwnerNamePublic = it },
+                        modifier = Modifier.testTag("switch_allow_owner_name_public")
+                    )
+                }
+
+                OutlinedTextField(
+                    value = houseTitle,
+                    onValueChange = { houseTitle = it },
+                    label = { Text(stringResource(R.string.house_title_label)) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_house_title")
+                )
+
+                OutlinedTextField(
+                    value = publicStatus,
+                    onValueChange = { publicStatus = it },
+                    label = { Text(stringResource(R.string.house_public_status_label)) },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("input_house_public_status")
+                )
+
                 Text(
                     text = "لون البيت:",
                     style = MaterialTheme.typography.bodyMedium,
@@ -206,7 +260,7 @@ fun AddOrEditHouseDialog(
                 }
 
                 Text(
-                    text = "الدولة والعلم:",
+                    text = stringResource(R.string.select_arab_country_flag),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -216,11 +270,20 @@ fun AddOrEditHouseDialog(
                         .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StarterCityMap.flagPresets.forEach { flag ->
+                    ArabCountriesRegistry.allCountries.forEach { spec ->
                         FilterChip(
-                            selected = selectedFlag.countryCode == flag.countryCode,
-                            onClick = { selectedFlag = flag },
-                            label = { Text(flag.countryName) }
+                            selected = selectedFlag.countryCode.equals(spec.isoCode, ignoreCase = true),
+                            onClick = { selectedFlag = spec.flagStyle },
+                            leadingIcon = {
+                                ArabFlagBadge(
+                                    flag = spec.flagStyle,
+                                    width = 24.dp,
+                                    height = 16.dp,
+                                    cornerRadius = 3.dp
+                                )
+                            },
+                            label = { Text(spec.nameAr) },
+                            modifier = Modifier.testTag("pick_flag_${spec.isoCode}")
                         )
                     }
                 }
@@ -354,7 +417,10 @@ fun AddOrEditHouseDialog(
                                 additionalPhone = additionalPhone.trim().ifEmpty { null },
                                 privateNotes = privateNotes.trim().ifEmpty { null },
                                 allowPhonePublic = allowPhonePublic,
-                                allowEmailPublic = allowEmailPublic
+                                allowEmailPublic = allowEmailPublic,
+                                houseTitle = houseTitle.trim().ifEmpty { null },
+                                publicStatus = publicStatus.trim().ifEmpty { null },
+                                allowOwnerNamePublic = allowOwnerNamePublic
                             )
                         )
                     }
@@ -369,147 +435,6 @@ fun AddOrEditHouseDialog(
             TextButton(onClick = onDismiss) {
                 Text("إلغاء")
             }
-        }
-    )
-}
-
-@Composable
-fun ChangeColorDialog(
-    house: House,
-    onDismiss: () -> Unit,
-    onSelectColor: (HousePalette) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("تغيير لون بيت ${house.ownerName}", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StarterCityMap.palettePresets.forEach { preset ->
-                    val selected = house.palette == preset.palette
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .minimumInteractiveComponentSize()
-                            .clickable { onSelectColor(preset.palette) }
-                            .testTag("color_option_${preset.key}")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(26.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(preset.palette.roofLeftHex))
-                                    .border(1.dp, Color.Black.copy(alpha = 0.2f), CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = preset.labelAr,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("إغلاق") }
-        }
-    )
-}
-
-@Composable
-fun MoveHouseDialog(
-    house: House,
-    allPlots: List<Plot>,
-    onDismiss: () -> Unit,
-    onConfirmMove: (String) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("نقل بيت ${house.ownerName}", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = "القطعة الحالية: ${house.plotId} (${house.coord.x}, ${house.coord.y})",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                allPlots.forEach { plot ->
-                    val isAvailable = plot.status == PlotStatus.AVAILABLE
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isAvailable) {
-                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .minimumInteractiveComponentSize()
-                            .clickable(enabled = isAvailable) { onConfirmMove(plot.id) }
-                            .testTag("move_target_${plot.id}")
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${plot.id} (${plot.coord.x}, ${plot.coord.y})",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = if (isAvailable) "متاحة • انقل هنا" else "مشغولة",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (isAvailable) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("إلغاء") }
-        }
-    )
-}
-
-@Composable
-fun DeleteHouseConfirmDialog(
-    house: House,
-    onDismiss: () -> Unit,
-    onConfirmDelete: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("تأكيد حذف البيت", fontWeight = FontWeight.Bold) },
-        text = {
-            Text("هل تريد حذف بيت ${house.ownerName} من القطعة ${house.plotId}؟ ستعود القطعة إلى حالة متاحة (AVAILABLE).")
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirmDelete,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.testTag("confirm_delete_house_button")
-            ) {
-                Text("حذف البيت")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("تراجع") }
         }
     )
 }

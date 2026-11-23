@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Saudi Arabia: Green field -->
+    <path
+        android:fillColor="#006C35"
+        android:pathData="M0,0 H120 V80 H0 Z" />
+    <!-- Stylized Arabic Shahada calligraphic band -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M24,33 V22 M30,33 V23 M37,24 V33 H44 V22 M50,23 V33 H57 M62,33 L66,22 L70,33 M75,24 C78,22 83,24 81,29 C79,34 74,33 74,33 M86,23 V33 M92,22 V33 H97" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M28,17 A1.6,1.6 0 1,1 27.99,17 Z M43,17 A1.6,1.6 0 1,1 42.99,17 Z M68,17 A1.6,1.6 0 1,1 67.99,17 Z M89,17 A1.6,1.6 0 1,1 88.99,17 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M26,41 H94 M36,38 C42,36 49,38 55,37 M64,37 C72,38 80,36 86,38" />
+    <!-- Horizontal white sword pointing toward hoist -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M25,54 L36,50.5 H88 V47.5 H91 V50.5 H97 C98.5,50.5 99.5,52.2 99.5,54 C99.5,55.8 98.5,57.5 97,57.5 H91 V60.5 H88 V57.5 H36 Z" />
+</vector>

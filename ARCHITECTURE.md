@@ -1,129 +1,48 @@
 # ARCHITECTURE — المعمارية التقنية لمشروع مدينة الطيبين
 
 ## 1. النظرة العامة والمعمارية العامة
-يعتمد المشروع نمط **Modular Clean Architecture + MVVM** مع فصل صارم بين:
-1. **نواة محرك المدينة (`core-city`)**: طبقة مستقلة عن التطبيقات وعن الشبكة، مسؤولة عن الإسقاط الأيزومتري، الكاميرا، إدارة قطع الأراضي، التحقق المكاني، ومُصيّر الرسم (Renderer).
-2. **نواة البيانات (`core-data`)**: نماذج الشبكة/التخزين، مصادقة الإدارة عبر Supabase Auth (`SupabaseAdminAuthRepository`)، ومستودعات Supabase، بدون أي اعتماد على واجهة المستخدم.
-3. **تطبيق الاستكشاف (`app-explorer`)**: واجهات الزوار، عرض المدينة، بطاقة البيت، ونموذج طلب بناء بيت (مستقبلاً).
-4. **تطبيق الإدارة (`app-admin`)**: لوحة تحكم المالك المحمية بتسجيل الدخول عبر Supabase Auth والتحقق من `profiles.role = 'ADMIN'`، إدارة البيوت والأراضي، ومعالجة الطلبات.
-
-```
-+-------------------+       +-------------------+
-|   app-explorer    |       |     app-admin     |
-| (Guest UI & Flow) |       | (Owner UI & Flow) |
-+---------+---------+       +---------+---------+
-          |                           |
-          +-------------+-------------+
-                        |
-          +-------------v-------------+
-          |         core-city         |
-          |  Engine, Iso, Camera,     |
-          |  SpatialValidator, Canvas |
-          +-------------+-------------+
-                        |
-          +-------------v-------------+
-          |         core-data         |
-          |  Models & Supabase Repos  |
-          +---------------------------+
-```
-
-> **ملاحظة تقنية حول بيئة AI Studio الحالية:**
-> القالب الحالي في AI Studio مبني حول وحدة واحدة `:app` تُشغَّل في المعاينة المباشرة. لذلك في المرحلة الأولى نبني حزم المحرك مفصولة منطقيًا وداخليًا داخل بنية نظيفة قابلة للنقل الفوري، ثم في مرحلة تقسيم الوحدات (Phase 2) نُفعّل `:core-city` و`:core-data` و`:app-explorer` و`:app-admin` (مع إبقاء توافق التشغيل أو توضيح إعدادات Gradle متعددة التطبيقات لـ GitHub Actions).
+يعتمد المشروع نمط **Modular Clean Architecture + MVVM** مقسمًا إلى أربع وحدات Gradle فعلية (`:core-city`, `:core-data`, `:app`, `:app-admin`):
+1. **نواة محرك المدينة (`:core-city`)**: طبقة مستقلة عن التطبيقات وعن الشبكة، مسؤولة عن الإسقاط الأيزومتري `2:1`، الكاميرا الديناميكية، إدارة قطع الأراضي متعددة الخلايا، التحقق المكاني، نظام الأصول (`CityAssetRegistry`/`CityAssetCache`)، محرك التحسين (`ViewportCuller`/`SpatialGridIndex`/`LodTier`)، ومُصيّر الرسم متعدد المراحل (`CityRenderer` + `LightingRenderer`).
+2. **نواة البيانات (`:core-data`)**: نماذج الشبكة/التخزين، مصادقة الإدارة عبر Supabase Auth (`SupabaseAdminAuthRepository`)، ومستودعات Supabase مع حماية الخصوصية وقواعد ProGuard المجمّعة.
+3. **تطبيق الاستكشاف (`:app`)**: واجهات الزوار، استكشاف المدينة بالكاميرا فقط، وبطاقة البيت العامة.
+4. **تطبيق الإدارة (`:app-admin`)**: لوحة تحكم المالك المحمية بتسجيل الدخول عبر Supabase Auth والتحقق من `profiles.role = 'ADMIN'`.
 
 ---
 
-## 2. اختيار محرك الرسم والتوافق مع بيئة البناء
-### المحرك المختار: **Jetpack Compose `Canvas` (Hardware-Accelerated Skia 2D)**
-**أسباب الاختيار:**
-- متوافق 100% مع Kotlin وJetpack Compose وAGP 9.1.1 / `compileSdk = 36` بدون مكتبات C++/NDK أو إضافات ثقيلة قد تفشل في بيئة البناء السحابية.
-- يتيح رسمًا متجهيًا ناعمًا للبيوت، الأسقف، النوافذ، الظلال، الأشجار، الشوارع، والأعلام المتحركة على أي كثافة شاشة (DPI-independent).
-- يدعم التحكم الكامل في ترتيب الرسم (Painter's Algorithm / Depth Sorting حسب `gridX + gridY`).
-- يسمح بعزل حركة الكاميرا والأعلام داخل **مرحلة الرسم (Draw Phase)** فقط.
-
-**لماذا تم استبعاد البدائل؟**
-- **Unity / Unreal**: ثقل كبير في حجم APK وتعارض مع بساطة واجهات Compose وبيئة البناء.
-- **LibGDX / OpenGL ES الخام**: تعقيد إدارة دورة حياة SurfaceView والتفاعل مع بطاقات Material 3 فوق الخريطة دون حاجة فعلية في خريطة متجهية نظيفة.
+## 2. اختيار محرك الرسم ونظام الأصول الرسومية (المرحلة 1 — City Builder)
+- **محرك الرسم:** Jetpack Compose `Canvas` (Hardware-Accelerated Skia 2D) مع إسقاط Isometric بنسبة **2:1** (`tileWidth = 2 * tileHeight`).
+- **الأصول المتجهة والذاكرة المؤقتة (`CityAssetRegistry` + `CityAssetCache`):**
+  - أصول `VectorDrawable` منظمة داخل `core-city/src/main/res/drawable/asset_*.xml` لـ 12 نوعًا من المباني العامة والزينة البيئية.
+  - تحويل كسول عند الطلب إلى `ImageBitmap` داخل ذاكرة `LruCache` محدودة الحجم (`64` مدخلًا افتراضيًا) مع تحرير تلقائي عند التخلص من `CityCanvas`.
+  - دمج مع الهندسة الإيزومترية متعددة الخلايا ومستويات الترقية (`upgradeLevel`) والزوايا (`0/90/180/270`).
 
 ---
 
-## 3. نظام المنظور الأيزومتري (2:1 Isometric Projection)
-تُخزّن عناصر العالم على شبكة منطقية ثنائية الأبعاد `(gridX, gridY)`، وتُحوّل إلى إحداثيات العالم الأيزومتري بنسبة عرض إلى ارتفاع **2:1** (`tileWidth = 2 * tileHeight`):
-
-- **التحويل الأمامي (Grid -> World):**
-  - `worldX = (gridX - gridY) * (tileWidth / 2f)`
-  - `worldY = (gridX + gridY) * (tileHeight / 2f)`
-- **التحويل العكسي (World -> Grid):**
-  - `halfW = tileWidth / 2f`، `halfH = tileHeight / 2f`
-  - `gridX = (worldX / halfW + worldY / halfH) / 2f`
-  - `gridY = (worldY / halfH - worldX / halfW) / 2f`
-- **ترتيب العمق (Depth Sorting):**
-  - يُحسب عمق الرسم لكل عنصر وفق `depth = gridX + gridY` لضمان رسم العناصر الخلفية قبل الأمامية بشكل طبيعي بدون تداخل بصري.
+## 3. مراحل الرسم والإضاءة (`CityRenderer` + `LightingRenderer`)
+تُنفذ عملية الرسم في `CityRenderer.render()` دون تخصيصات ثقيلة أثناء الإطار بالترتيب التالي:
+1. **الخلفية الجوية (`drawSkyBackdrop`):** تدرج السماء حسب الطور (`DAY`, `SUNSET`, `NIGHT`).
+2. **حساب حدود الرؤية ومستوى التفصيل (`ViewportCuller`):** استخلاص `[minX..maxX, minY..maxY]` واختيار `LodTier` (`HIGH`, `MEDIUM`, `LOW`) من مستوى `camera.zoom`.
+3. **قاعدة الجزيرة والأرضيات (`drawIslandSkirt`, `drawTile`):** رسم البلاطات المرئية فقط (تضاريس العشب، الحدائق، التربة، الحقول الزراعية، الحجر، البلاط المزخرف، الساحات، المياه، الأرصفة، الشوارع والتقاطعات ومعابر المشاة).
+4. **حدود القطع وعناصر الأرضية (`drawPlotFootprintPad`, `GROUND_OVERLAY`):** مواقف السيارات ومعابر المشاة وإبراز حالة القطع (`AVAILABLE`, `UNAVAILABLE`, `OCCUPIED`).
+5. **برك الضوء والأضواء الليلية (`drawLightPools`):** هالات إنارة الشوارع ومصادر الضوء الدائرية والمخروطية عند الغروب والليل.
+6. **ترتيب العمق للأجسام المرتفعة (`SpatialGridIndex` + `footprintDepthKey`):** فرز البيوت والمباني العامة والأشجار وأعمدة الإنارة والزينة المرئية فقط من الخلف إلى الأمام.
+7. **طبقة الجو العامة (`drawAmbientAtmosphereOverlay`):** صبغة غروب أو ليل خفيفة تحافظ على وضوح العناصر المضيئة (`hasLitWindows`, `isLitAtNight`).
 
 ---
 
-## 4. نظام الكاميرا والأداء (60 FPS بدون Recomposition)
-### حالة الكاميرا (`CameraState`)
-- `panX: Float`, `panY: Float` (إزاحة مركز العالم بالبكسل المنطقي أو بوحدة العالم)
-- `zoom: Float` (مقيد بين `minZoom` و`maxZoom`، مثلاً `0.6f .. 2.8f`)
-- `viewportWidth: Float`, `viewportHeight: Float`
-
-### التحويل بين الشاشة والعالم
-- `screenX = (worldX * zoom) + panX + viewportWidth / 2f`
-- `screenY = (worldY * zoom) + panY + viewportHeight / 2f`
-- `worldX = (screenX - viewportWidth / 2f - panX) / zoom`
-- `worldY = (screenY - viewportHeight / 2f - panY) / zoom`
-
-### الحفاظ على نقطة التركيز أثناء التكبير (Focal-Point Zoom)
-عند تغيّر `zoom` من `oldZoom` إلى `newZoom` حول نقطة اللمس `focalScreen`:
-1. نحسب نقطة العالم تحت الإصبع قبل التكبير: `worldBefore = screenToWorld(focalScreen, oldCamera)`.
-2. نحدّث `zoom = clamp(oldZoom * zoomFactor, minZoom, maxZoom)`.
-3. نضبط `panX` و`panY` بحيث تبقى `worldBefore` مطابقة لـ `focalScreen` بعد التكبير، ثم نطبّق حدود العالم (`clampToWorldBounds`).
-
-### منع Recomposition أثناء الحركة ورفرفة الأعلام
-- تُحفظ حالة الكاميرا داخل `CameraController` باستخدام حقول mutable مدعومة بـ `State<Long>` أو `mutableFloatStateOf` تُقرأ **فقط** داخل `Canvas { ... }` (Draw Phase) وداخل `pointerInput`.
-- حركة رفرفة الأعلام تُدار عبر `withInfiniteAnimationFrameNanos` / `LaunchedEffect` يحدّث `animationTimeSeconds` داخل حالة مخصصة للرسم فقط، فلا يُعاد تركيب شجرة Compose UI عند تغير الإطارات.
-- الكائنات الهندسية (`Path`, `Paint`, مصفوفات النقاط) تُعاد استخدامها داخل طبقة الرسم لتفادي الضغط على جامع القمامة (GC).
+## 4. الأداء والقياس للمدن الكبيرة (آلاف العناصر)
+- **`SpatialGridIndex<T>` (حواضن `4x4`):** تقسيم المكاني في الذاكرة للبيوت، المباني العامة، الأراضي، الزينة، والأشجار، يُحدَّث فقط عند تغيّر مرجع `CitySceneState` (`cachedSceneRef === scene`) ليعمل البحث والنقر (`Hit-Testing`) في وقت شبه ثابت `O(1)`.
+- **`ViewportCuller`:** تجاهل تام لجميع البلاطات والعناصر خارج الشاشة + هامش أمان للأسطح المرتفعة.
+- **مستويات التفصيل (`LodTier`):** تقليل التفاصيل الدقيقة (إطارات النوافذ، تفاصيل الرصف، المقاعد والزهور الصغيرة) عند التصغير الواسع (`LOW LOD`) مع إبقاء الهوية البصرية للمباني واضحة.
+- **كاميرا ديناميكية:** `CityEngine.syncSceneBounds(scene)` يُحدّث حدود السحب تلقائيًا عند توسع الشبكة فوق `12x12`.
 
 ---
 
-## 5. التفاعل وتحديد البيوت (Hit-Testing)
-عند نقرة المستخدم `(tapX, tapY)`:
-1. تحويل نقطة الشاشة إلى إحداثيات العالم `(worldX, worldY)` عبر `CameraController`.
-2. التحقق الدقيق من البيوت المرئية مرتبةً من **الأقرب للكاميرا إلى الأبعد** (عكس ترتيب الرسم)، باستخدام مضلع/صندوق الإحاطة الهندسي الفعلي للبيت (بما يشمل ارتفاع الجدران والسقف) وليس فقط قاعدة الأرضية.
-3. إذا لم يُصب جسم بيت مرتفع، نتحقق من خلية الشبكة تحت المؤشر `(floor(gridX), floor(gridY))` لمطابقة قطعة الأرض.
-4. عند المطابقة، يُصدر المحرك حدثًا منضبطًا `CityInteractionEvent.HouseSelected(houseId)` أو `PlotSelected(plotId)` إلى واجهة Android.
+## 5. التوافق الخلفي والأمامي مع Supabase
+- **ترحيلات أمامية (`part_14`–`part_18`) بدون حذف:** توسيع `city_layout`, `plots`, `houses`, `house_public_details`, `city_buildings`, `house_requests` بحقول ودوال جديدة دون حذف أي جدول أو عمود قائم، مع إنشاء `city_districts`, `city_buildings`, `city_environment_props`, `city_lights` محمية بـ RLS و`public.is_admin()`.
+- **قراءة آمنة اختيارية في `:core-data`:** يستعلم `SupabaseCityExplorerRepository` و`SupabaseCityAdminRepository` الجداول الجديدة ضمن `runCatching { ... }.getOrDefault(emptyList())` لضمان عمل التطبيقين قبل أو بعد تشغيل الترحيلات الجديدة.
+- **ذاكرة الحالة الدائمة في Explorer (`ExplorerSnapshotCache`):** تخزين آخر لقطة مدينة متزامنة محليًا بتنسيق JSON حتى يعمل تطبيق المشاهدة بسرعة ويستمر بعرض آخر تصميم معتمد عند انقطاع الشبكة، ثم يتزامن تلقائيًا عبر Realtime والتحديثات التزايدية عند عودة الاتصال.
+- **منظومة الأعلام العربية الـ 22 الموحدة (`ArabCountriesRegistry` + `FlagRenderer` + `ArabFlagBadge`):** ربط موحد بين رسوم `VectorDrawable` المضمنة (`flag_sa.xml`..`flag_km.xml`)، الرسم الإيزومتري للأعلام فوق المنازل وأعلام المدينة المستقلة (`CITY_FLAG`)، ومكوّن `ArabFlagBadge` في البطاقات والقوائم.
+- **تدفق طلبات بناء المنازل (`submit_house_request` -> `AdminRequestsScreen`):** إرسال آمن للزوار عبر RPC (`SECURITY DEFINER`) بحماية التكرار وتجريد حقل عدد أفراد الأسرة، متزامنًا مع لوحة الإدارة (`house_requests` عبر Realtime) وربط مباشر بالأرض المتاحة وبناء المنزل ذريًا (`admin_assign_request_plot_and_house`).
+- **عزل المصادقة والخصوصية:** مستمر بالكامل وفق **ADR-008** و**ADR-011** (Supabase Auth بالبريد وكلمة المرور + `profiles.role = 'ADMIN'`).
 
----
-
-## 6. ربط محرك المدينة بواجهات Android
-يعتمد الربط على **تدفق بيانات أحادي الاتجاه (Unidirectional Data Flow)**:
-- **المدخلات إلى المحرك (`CitySceneState`):** قائمة قطع الأراضي، البيوت، العناصر البيئية (شوارع/أشجار/أعمدة إنارة/مساحة خضراء)، ومعرّف العنصر المحدد حاليًا.
-- **المخرجات من المحرك (`onCityEvent`):** أحداث النقر (`HouseTapped`, `PlotTapped`, `EmptySpaceTapped`) دون احتواء المحرك على أي منطق تنقّل أو نوافذ منبثقة.
-- **الواجهة الحاضنة (`Compose Overlay`):** تستقبل الحدث عبر `ViewModel` وتعرض بطاقة Material 3 عائمة فوق الخريطة (تفاصيل البيت في `app-explorer`، أو أدوات التحرير/البناء في `app-admin`).
-
----
-
-## 7. تخزين إحداثيات البيوت والأراضي
-- **في الخريطة والمحرك:** إحداثيات شبكة صحيحة `(gridX: Int, gridY: Int)` مع أبعاد منطقية ثابتة للقطعة (`widthCells = 1, heightCells = 1` أو بحسب التوسع).
-- **مزايا الإحداثيات الشبكية الصحيحة:**
-  1. دقة تامة دون أخطاء الفاصلة العائمة (`Float rounding drift`).
-  2. منع التداخل برمجيًا عبر `SpatialValidator` وقاعدة بيانات PostgreSQL عبر قيد `UNIQUE (grid_x, grid_y)`.
-  3. استعلام سريع جدًا وسهولة الفهرسة مستقبلًا في Supabase عند نمو المدينة.
-
----
-
-## 8. المزامنة الخلفية وأمان المصادقة (Supabase — المرحلة 4)
-- **التخزين المركزي:** Supabase PostgreSQL للجداول الأساسية: `profiles`, `city_layout`, `plots`, `houses`, `house_private_details`, `house_public_details`, `house_requests` (مع الإبقاء على جداول الخادم القديمة غير المستخدمة في التطبيق مقفلة عبر RLS دون حذف بيانات).
-- **نظام تسجيل الدخول المعتمد في `:app-admin` (المرحلة 4 — Supabase Auth):**
-  1. يسجّل المالك الدخول بالبريد الإلكتروني وكلمة المرور عبر `AdminLoginScreen` واستدعاء Supabase Auth (`signInWith(Email)`).
-  2. فور استلام جلسة JWT صالحة، يتحقق `SupabaseAdminAuthRepository` من صف المستخدم في `public.profiles` للتأكد من أن `role = 'ADMIN'`.
-  3. أي حساب لا يمتلك دور `'ADMIN'` (مثل `'VIEWER'`) أو يفتقد صف الملف الشخصي يُسجَّل خروجه فورًا وتُعرض حالة `AccessDenied` دون أي وصول للوحة الإدارة.
-  4. يدعم التطبيق استعادة الجلسة وتجديد التوكن بأمان (`alwaysAutoRefresh = true` و`refreshCurrentSession()`)، والتحقق قبل العمليات الحساسة، وتسجيل الخروج الكامل من الشريط العلوي مع مسح الجلسة وحالة الذاكرة.
-  5. إذا انتهت صلاحية الجلسة (`401` / `JWT expired`) أو فُقدت صلاحية الإدارة (`403` / `42501`)، يُحجب الدخول فورًا وتُمسح الجلسة والبيانات الإدارية المؤقتة وتظهر شاشة تسجيل الدخول.
-  6. يُعزل عميل الإدارة (`SupabaseClientProvider.getOrCreateAdminClient`) كليًا عن عميل الزوار المجهول (`SupabaseClientProvider.getOrCreate`).
-- **فصل الخصوصية:**
-  - `house_private_details` و`houses` محميان كليًا بصلاحيات الإدارة فقط (`public.is_admin()`)، وتكون موافقات نشر الهاتف (`allow_phone_public`) والبريد (`allow_email_public`) مفصولة ومرفوضة افتراضيًا (`false`).
-  - `house_public_details` يُحدَّث تلقائيًا عبر مشغّلات قاعدة البيانات ولا يحتوي أبدًا على بيانات خاصة غير مصرّح بنشرها.
-- **المزامنة اللحظية (Supabase Realtime):**
-  - يتلقى تطبيق الاستكشاف التحديثات التزايدية على `house_public_details` و`plots` و`city_layout`.
-  - يتلقى تطبيق الإدارة تنبيهات التغيير عبر `house_public_details` و`plots` و`city_layout` ثم يحدّث الصف المعني من `houses` و`house_private_details` عبر طلب PostgREST محمي بجلسة `authenticated` ودور `ADMIN`.

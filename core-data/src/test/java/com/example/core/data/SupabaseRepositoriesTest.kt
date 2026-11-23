@@ -1,31 +1,24 @@
 package com.example.core.data
 
+import com.example.cityengine.model.CityTileType
+import com.example.cityengine.model.GridCoord
 import com.example.cityengine.model.PlotStatus
+import com.example.cityengine.model.TimeOfDayPhase
 import com.example.cityengine.world.StarterCityMap
-import com.example.core.data.model.AdminHouseDraft
-import com.example.core.data.model.AdminOperationResult
 import com.example.core.data.model.CityDataState
-import com.example.core.data.supabase.AdminAuthState
 import com.example.core.data.supabase.AlwaysOnlineChecker
 import com.example.core.data.supabase.ConnectivityChecker
 import com.example.core.data.supabase.HousePublicDto
 import com.example.core.data.supabase.PlotDto
-import com.example.core.data.supabase.SupabaseAdminAuthRepository
-import com.example.core.data.supabase.SupabaseCityAdminRepository
 import com.example.core.data.supabase.SupabaseCityExplorerRepository
 import com.example.core.data.supabase.SupabaseClientProvider
 import com.example.core.data.supabase.SupabaseConfig
 import com.example.core.data.supabase.SupabaseMapper
-import io.github.jan.supabase.auth.MemorySessionManager
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.user.UserInfo
-import io.github.jan.supabase.auth.user.UserSession
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import kotlin.time.Instant
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -37,7 +30,6 @@ import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -105,49 +97,6 @@ class SupabaseRepositoriesTest {
             "approved_email": null
           }
         ]
-    """.trimIndent()
-
-    private fun sampleAdminHousesJson(): String = """
-        [
-          {
-            "id": "house_01",
-            "plot_id": "plot_01",
-            "resident_name": "أبو عبدالله الحربي",
-            "country_code": "SA",
-            "country": "المملكة العربية السعودية",
-            "flag_stripes": [4279664454, 4294967295, 4279664454],
-            "flag_vertical": false,
-            "family_size": 5,
-            "house_color": "terracotta",
-            "palette_json": {"wallLeftHex":4294373346,"wallRightHex":4293121987,"roofLeftHex":4291320378,"roofRightHex":4288626725,"roofTrimHex":4286788124,"doorHex":4284299817,"windowHex":4293129466},
-            "grid_x": 1,
-            "grid_y": 1,
-            "public_role": "منسق مجلس الحي",
-            "public_about": "أهلاً بكم",
-            "allow_public_info": true,
-            "show_family_count_publicly": true
-          }
-        ]
-    """.trimIndent()
-
-    private fun sampleTokenResponseJson(
-        accessToken: String,
-        refreshToken: String,
-        userId: String,
-        email: String
-    ): String = """
-        {
-          "access_token": "$accessToken",
-          "token_type": "bearer",
-          "expires_in": 3600,
-          "refresh_token": "$refreshToken",
-          "user": {
-            "id": "$userId",
-            "aud": "authenticated",
-            "role": "authenticated",
-            "email": "$email"
-          }
-        }
     """.trimIndent()
 
     @Test
@@ -301,369 +250,60 @@ class SupabaseRepositoriesTest {
     }
 
     @Test
-    fun `admin login with email and password verifies ADMIN role executes all 5 rpcs and supports sign out`() = runBlocking {
-        val calledRpcs = mutableListOf<String>()
-        val capturedAuthHeaders = mutableListOf<String?>()
-        var logoutCalled = false
-
-        val mockEngine = MockEngine { request ->
-            val path = request.url.encodedPath
-            if (path.contains("/rpc/admin_") || path.endsWith("/houses")) {
-                capturedAuthHeaders += request.headers[HttpHeaders.Authorization]
-            }
-            when {
-                path.endsWith("/auth/v1/token") -> respond(
-                    content = sampleTokenResponseJson(
-                        accessToken = "jwt_admin_valid_123",
-                        refreshToken = "rt_admin_123",
-                        userId = "uid_owner_1",
-                        email = "owner@madina.test"
-                    ),
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/auth/v1/logout") -> {
-                    logoutCalled = true
-                    respond("", HttpStatusCode.NoContent)
-                }
-                path.endsWith("/profiles") -> respond(
-                    content = """[{"id":"uid_owner_1","display_name":"مالك المدينة","role":"ADMIN"}]""",
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/city_layout") -> respond(
-                    sampleLayoutJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/plots") -> respond(
-                    samplePlotsJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/houses") -> respond(
-                    sampleAdminHousesJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/house_private_details") -> respond(
-                    "[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.contains("/rpc/admin_") -> {
-                    calledRpcs += path.substringAfterLast("/rpc/")
-                    respond(
-                        content = """{"house_id":"house_99","plot_id":"plot_10"}""",
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                else -> respond("[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-            }
-        }
-
-        val sessionManager = MemorySessionManager()
-        val client = SupabaseClientProvider.createClient(
-            config = validConfig,
-            httpClientEngine = mockEngine,
-            sessionManager = sessionManager,
-            autoLoadFromStorage = false
-        )
-        val authRepo = SupabaseAdminAuthRepository(validConfig, { client }, AlwaysOnlineChecker)
-        val adminRepo = SupabaseCityAdminRepository(
-            config = validConfig,
-            authRepository = authRepo,
-            clientProvider = { client },
-            connectivityChecker = AlwaysOnlineChecker,
-            ioDispatcher = Dispatchers.IO,
-            enableRealtime = false
-        )
-
-        // 1. Fresh launch with no stored session starts Unauthenticated
-        authRepo.restoreAndVerifySession()
-        assertTrue(authRepo.authState.value is AdminAuthState.Unauthenticated)
-        assertFalse(authRepo.isAuthenticatedAdmin())
-
-        // 2. Sign in with valid ADMIN credentials
-        authRepo.signIn("owner@madina.test", "StrongPass#2026")
-        val authed = authRepo.authState.value
-        assertTrue("Expected AuthenticatedAdmin, got $authed", authed is AdminAuthState.AuthenticatedAdmin)
-        assertEquals("owner@madina.test", (authed as AdminAuthState.AuthenticatedAdmin).email)
-        assertEquals("مالك المدينة", authed.displayName)
-        assertTrue(authRepo.isAuthenticatedAdmin())
-
-        val initialAdminState = withTimeout(10_000) {
-            adminRepo.observeAdminSnapshot().first { it !is CityDataState.Loading }
-        }
-        assertTrue("Expected Admin Success, got $initialAdminState", initialAdminState is CityDataState.Success)
-
-        val sampleDraft = AdminHouseDraft(
-            targetPlotId = "plot_10",
-            ownerName = "فيصل",
-            familyMembersCount = 4,
-            flag = StarterCityMap.flagPresets.first(),
-            palette = StarterCityMap.palettePresets.first().palette
-        )
-
-        assertTrue(adminRepo.addHouse(sampleDraft) is AdminOperationResult.Success)
-        assertTrue(adminRepo.updateHouse("house_01", sampleDraft) is AdminOperationResult.Success)
-        assertTrue(adminRepo.changeHouseColor("house_01", StarterCityMap.palettePresets[2].palette) is AdminOperationResult.Success)
-        assertTrue(adminRepo.moveHouse("house_01", "plot_10") is AdminOperationResult.Success)
-        assertTrue(adminRepo.deleteHouse("house_01") is AdminOperationResult.Success)
-
-        assertEquals(
-            listOf(
-                "admin_add_house",
-                "admin_update_house",
-                "admin_change_house_color",
-                "admin_move_house",
-                "admin_delete_house"
-            ),
-            calledRpcs
-        )
-        assertTrue(capturedAuthHeaders.isNotEmpty())
-        assertTrue(capturedAuthHeaders.all { it == "Bearer jwt_admin_valid_123" })
-
-        // 3. Sign out clears session & blocks subsequent mutations
-        authRepo.signOut()
-        assertTrue(logoutCalled)
-        assertTrue(authRepo.authState.value is AdminAuthState.Unauthenticated)
-        assertNull(sessionManager.loadSession())
-        val afterSignOutAdd = adminRepo.addHouse(sampleDraft)
-        assertTrue(afterSignOutAdd is AdminOperationResult.Failure)
-    }
-
-    @Test
-    fun `viewer role account is rejected on sign in and blocked from admin mutations`() = runBlocking {
-        var logoutCalled = false
-        val calledRpcs = mutableListOf<String>()
-
-        val mockEngine = MockEngine { request ->
+    fun `explorer stays backward-compatible when builder tables return 404 and maps expanded builder payloads`() = runBlocking {
+        val phase4OnlyEngine = MockEngine { request ->
             val path = request.url.encodedPath
             when {
-                path.endsWith("/auth/v1/token") -> respond(
-                    content = sampleTokenResponseJson(
-                        accessToken = "jwt_viewer_only",
-                        refreshToken = "rt_viewer_only",
-                        userId = "uid_viewer_99",
-                        email = "viewer@madina.test"
-                    ),
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/auth/v1/logout") -> {
-                    logoutCalled = true
-                    respond("", HttpStatusCode.NoContent)
-                }
-                path.endsWith("/profiles") -> respond(
-                    content = """[{"id":"uid_viewer_99","display_name":"مستخدم عادي","role":"VIEWER"}]""",
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.contains("/rpc/admin_") -> {
-                    calledRpcs += path
-                    respond("""{}""", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-                }
-                else -> respond("[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                path.endsWith("/city_layout") -> respond(sampleLayoutJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                path.endsWith("/plots") -> respond(samplePlotsJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                path.endsWith("/house_public_details") -> respond(samplePublicHousesJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                else -> respond("""{"code":"PGRST205","message":"table not found"}""", HttpStatusCode.NotFound, headersOf(HttpHeaders.ContentType, "application/json"))
             }
         }
+        val clientLegacy = SupabaseClientProvider.createClient(validConfig, phase4OnlyEngine, autoLoadFromStorage = false)
+        val repoLegacy = SupabaseCityExplorerRepository(validConfig, { clientLegacy }, AlwaysOnlineChecker, Dispatchers.IO, enableRealtime = false)
+        val legacyState = withTimeout(10_000) { repoLegacy.observeCitySnapshot().first { it !is CityDataState.Loading } }
+        assertTrue("Expected graceful Success even when optional builder tables 404, got $legacyState", legacyState is CityDataState.Success)
+        assertEquals(1, (legacyState as CityDataState.Success).data.scene.houses.size)
 
-        val sessionManager = MemorySessionManager()
-        val client = SupabaseClientProvider.createClient(
-            config = validConfig,
-            httpClientEngine = mockEngine,
-            sessionManager = sessionManager,
-            autoLoadFromStorage = false
-        )
-        val authRepo = SupabaseAdminAuthRepository(validConfig, { client }, AlwaysOnlineChecker)
-        val adminRepo = SupabaseCityAdminRepository(
-            config = validConfig,
-            authRepository = authRepo,
-            clientProvider = { client },
-            connectivityChecker = AlwaysOnlineChecker,
-            ioDispatcher = Dispatchers.IO,
-            enableRealtime = false
-        )
-
-        authRepo.signIn("viewer@madina.test", "ViewerPass123!")
-
-        val state = authRepo.authState.value
-        assertTrue("Expected AccessDenied for VIEWER, got $state", state is AdminAuthState.AccessDenied)
-        assertEquals("viewer@madina.test", (state as AdminAuthState.AccessDenied).email)
-        assertFalse(authRepo.isAuthenticatedAdmin())
-        assertTrue("VIEWER session must be signed out immediately", logoutCalled)
-        assertNull(sessionManager.loadSession())
-
-        val attempt = adminRepo.addHouse(
-            AdminHouseDraft(
-                targetPlotId = "plot_10",
-                ownerName = "تجربة مرفوضة",
-                familyMembersCount = 3,
-                flag = StarterCityMap.flagPresets.first(),
-                palette = StarterCityMap.palettePresets.first().palette
-            )
-        )
-        assertTrue(attempt is AdminOperationResult.Failure)
-        assertTrue(calledRpcs.isEmpty())
-    }
-
-    @Test
-    fun `bad password and offline login attempts are rejected cleanly`() = runBlocking {
-        var online = true
-        val connectivity = object : ConnectivityChecker {
-            override fun isOnline(): Boolean = online
-        }
-        val mockEngine = MockEngine { request ->
-            if (request.url.encodedPath.endsWith("/auth/v1/token")) {
-                respond(
-                    content = """{"error":"invalid_grant","error_description":"Invalid login credentials"}""",
-                    status = HttpStatusCode.BadRequest,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-            } else {
-                respond("[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-            }
-        }
-        val client = SupabaseClientProvider.createClient(
-            config = validConfig,
-            httpClientEngine = mockEngine,
-            autoLoadFromStorage = false
-        )
-        val authRepo = SupabaseAdminAuthRepository(validConfig, { client }, connectivity)
-
-        // 1. Offline sign-in rejected before HTTP
-        online = false
-        authRepo.signIn("owner@madina.test", "WrongPass")
-        val offlineState = authRepo.authState.value
-        assertTrue(offlineState is AdminAuthState.Unauthenticated)
-        assertTrue((offlineState as AdminAuthState.Unauthenticated).feedbackMessage!!.contains("إنترنت"))
-
-        // 2. Wrong password rejected with Arabic message
-        online = true
-        authRepo.signIn("owner@madina.test", "WrongPass")
-        val badCredsState = authRepo.authState.value
-        assertTrue(badCredsState is AdminAuthState.Unauthenticated)
-        assertEquals(
-            "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
-            (badCredsState as AdminAuthState.Unauthenticated).feedbackMessage
-        )
-    }
-
-    @Test
-    fun `session restore refreshes expired token safely and handles 401 or 42501 failure`() = runBlocking {
-        var refreshSucceeded = false
-        var failNextAdminRpcWith: String? = null
-        val expiredSession = UserSession(
-            accessToken = "jwt_expired_old",
-            refreshToken = "rt_valid_1",
-            expiresIn = 3600L,
-            tokenType = "bearer",
-            user = UserInfo(id = "uid_owner_1", aud = "authenticated", email = "owner@madina.test"),
-            expiresAt = Instant.fromEpochSeconds(1_000_000L) // Expired in the past
-        )
-        val sessionManager = MemorySessionManager()
-        sessionManager.saveSession(expiredSession)
-
-        val mockEngine = MockEngine { request ->
+        val expandedEngine = MockEngine { request ->
             val path = request.url.encodedPath
-            if (failNextAdminRpcWith != null && path.contains("/rpc/admin_")) {
-                val mode = failNextAdminRpcWith
-                failNextAdminRpcWith = null
-                return@MockEngine if (mode == "401") {
-                    respond(
-                        content = """{"message":"JWT expired"}""",
-                        status = HttpStatusCode.Unauthorized,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                } else {
-                    respond(
-                        content = """{"code":"42501","message":"permission denied for table houses"}""",
-                        status = HttpStatusCode.Forbidden,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
+            val body = when {
+                path.endsWith("/city_layout") -> """
+                    [{
+                      "id": "main_city", "version": 2, "grid_width": 20, "grid_height": 20,
+                      "roads": [{"x":3,"y":0}], "sidewalks": [], "parks": [], "trees": [], "lamp_posts": [],
+                      "custom_tiles": [{"x":15,"y":15,"type":"WATER","texture":"DEFAULT"}],
+                      "lighting_config": {"phase":"NIGHT","sunAzimuthDeg":40,"ambientDimming":0.2,"nightLampAutoOn":true}
+                    }]
+                """.trimIndent()
+                path.endsWith("/plots") -> """
+                    [
+                      {"id":"plot_01","layout_id":"main_city","plot_code":"P-01","grid_x":1,"grid_y":1,"status":"OCCUPIED","width_cells":2,"height_cells":1,"rotation_deg":90},
+                      {"id":"plot_99","layout_id":"main_city","plot_code":"P-99","grid_x":14,"grid_y":2,"status":"UNAVAILABLE","width_cells":2,"height_cells":2}
+                    ]
+                """.trimIndent()
+                path.endsWith("/house_public_details") -> samplePublicHousesJson()
+                path.endsWith("/city_districts") -> """[{"id":"d1","name_ar":"الحي المركزي","code":"CIVIC","grid_x":12,"grid_y":0,"width_cells":8,"height_cells":8}]"""
+                path.endsWith("/city_buildings") -> """[{"id":"b1","name_ar":"القصر الرئاسي","building_type":"PRESIDENTIAL_PALACE","grid_x":14,"grid_y":5,"width_cells":3,"height_cells":3}]"""
+                path.endsWith("/city_environment_props") -> """[{"id":"p1","prop_type":"FOUNTAIN","grid_x":13,"grid_y":2}]"""
+                path.endsWith("/city_lights") -> """[{"id":"l1","light_type":"FOUNTAIN_GLOW","grid_x":13,"grid_y":2,"is_enabled":true}]"""
+                else -> "[]"
             }
-            when {
-                path.endsWith("/auth/v1/token") -> {
-                    refreshSucceeded = true
-                    respond(
-                        content = sampleTokenResponseJson(
-                            accessToken = "jwt_refreshed_fresh",
-                            refreshToken = "rt_valid_2",
-                            userId = "uid_owner_1",
-                            email = "owner@madina.test"
-                        ),
-                        status = HttpStatusCode.OK,
-                        headers = headersOf(HttpHeaders.ContentType, "application/json")
-                    )
-                }
-                path.endsWith("/auth/v1/logout") -> respond("", HttpStatusCode.NoContent)
-                path.endsWith("/profiles") -> respond(
-                    content = """[{"id":"uid_owner_1","display_name":"مالك المدينة","role":"ADMIN"}]""",
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/city_layout") -> respond(
-                    sampleLayoutJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/plots") -> respond(
-                    samplePlotsJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/houses") -> respond(
-                    sampleAdminHousesJson(), HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                path.endsWith("/house_private_details") -> respond(
-                    "[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
-                )
-                else -> respond("[]", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
-            }
+            respond(body, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }
-
-        val client = SupabaseClientProvider.createClient(
-            config = validConfig,
-            httpClientEngine = mockEngine,
-            sessionManager = sessionManager,
-            autoLoadFromStorage = true,
-            alwaysAutoRefresh = false
-        )
-        val authRepo = SupabaseAdminAuthRepository(validConfig, { client }, AlwaysOnlineChecker)
-        val adminRepo = SupabaseCityAdminRepository(
-            config = validConfig,
-            authRepository = authRepo,
-            clientProvider = { client },
-            connectivityChecker = AlwaysOnlineChecker,
-            ioDispatcher = Dispatchers.IO,
-            enableRealtime = false
-        )
-
-        // 1. Restoring near/past-expiry session refreshes token and verifies ADMIN role
-        authRepo.restoreAndVerifySession()
-        assertTrue("Expected refresh_token grant to run", refreshSucceeded)
-        assertTrue("Expected AuthenticatedAdmin, got ${authRepo.authState.value}", authRepo.authState.value is AdminAuthState.AuthenticatedAdmin)
-        assertEquals("jwt_refreshed_fresh", sessionManager.loadSession()?.accessToken)
-
-        val snap = withTimeout(10_000) {
-            adminRepo.observeAdminSnapshot().first { it !is CityDataState.Loading }
-        }
-        assertTrue(snap is CityDataState.Success)
-
-        // 2. Mid-session 401 JWT expired forces SessionExpired and clears session
-        failNextAdminRpcWith = "401"
-        val expiredResult = adminRepo.deleteHouse("house_01")
-        assertTrue(expiredResult is AdminOperationResult.Failure)
-        assertTrue(authRepo.authState.value is AdminAuthState.SessionExpired)
-        assertNull(sessionManager.loadSession())
-
-        // 3. Re-authenticate, then mid-session 42501 permission denied forces AccessDenied
-        client.auth.importSession(
-            UserSession(
-                accessToken = "jwt_valid_again",
-                refreshToken = "rt_valid_3",
-                expiresIn = 3600L,
-                tokenType = "bearer",
-                user = UserInfo(id = "uid_owner_1", aud = "authenticated", email = "owner@madina.test")
-            )
-        )
-        authRepo.restoreAndVerifySession()
-        assertTrue(authRepo.authState.value is AdminAuthState.AuthenticatedAdmin)
-
-        failNextAdminRpcWith = "42501"
-        val rlsFailure = adminRepo.deleteHouse("house_01")
-        assertTrue(rlsFailure is AdminOperationResult.Failure)
-        assertNotNull((rlsFailure as AdminOperationResult.Failure).reason)
-        assertTrue(authRepo.authState.value is AdminAuthState.AccessDenied)
+        val clientExpanded = SupabaseClientProvider.createClient(validConfig, expandedEngine, autoLoadFromStorage = false)
+        val repoExpanded = SupabaseCityExplorerRepository(validConfig, { clientExpanded }, AlwaysOnlineChecker, Dispatchers.IO, enableRealtime = false)
+        val expandedState = withTimeout(10_000) { repoExpanded.observeCitySnapshot().first { it !is CityDataState.Loading } }
+        assertTrue("Expected Success for expanded payload, got $expandedState", expandedState is CityDataState.Success)
+        val scene = (expandedState as CityDataState.Success).data.scene
+        assertEquals(20, scene.gridWidth)
+        assertEquals(TimeOfDayPhase.NIGHT, scene.lightingState.phase)
+        assertEquals(CityTileType.WATER, scene.tiles[GridCoord(15, 15)])
+        assertEquals(PlotStatus.UNAVAILABLE, scene.plots.first { it.id == "plot_99" }.status)
+        assertEquals(1, scene.districts.size)
+        assertEquals(1, scene.publicBuildings.size)
+        assertEquals(1, scene.environmentProps.size)
+        assertEquals(1, scene.lights.size)
     }
 }

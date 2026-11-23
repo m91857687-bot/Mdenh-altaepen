@@ -1,10 +1,15 @@
 package com.example.core.data.supabase
 
+import com.example.core.data.local.CachedCitySnapshotBundle
+import com.example.core.data.local.ExplorerSnapshotCache
 import com.example.core.data.model.CityDataState
 import com.example.core.data.model.CityExplorerSnapshot
+import com.example.core.data.model.HouseRequestDraft
+import com.example.core.data.model.HouseRequestSubmissionResult
 import com.example.core.data.repository.CityExplorerRepository
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.RealtimeChannel
 import io.github.jan.supabase.realtime.channel
@@ -26,19 +31,22 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * Production Supabase repository for :app (City Explorer).
- * Reads exclusively from public, visitor-safe tables (city_layout, plots, house_public_details)
- * and receives incremental Realtime updates without reloading the full database on every change.
+ * Reads exclusively from public, visitor-safe tables (city_layout, plots, house_public_details,
+ * and optional City Builder tables when part_14+ is applied) with Realtime updates.
  */
 class SupabaseCityExplorerRepository(
     private val config: SupabaseConfig,
     private val clientProvider: () -> SupabaseClient? = { SupabaseClientProvider.getOrCreate(config) },
     private val connectivityChecker: ConnectivityChecker = AlwaysOnlineChecker,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val enableRealtime: Boolean = true
+    private val enableRealtime: Boolean = true,
+    private val snapshotCache: ExplorerSnapshotCache? = null
 ) : CityExplorerRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
@@ -47,6 +55,11 @@ class SupabaseCityExplorerRepository(
     private var cachedLayout: CityLayoutDto? = null
     private val plotsById = mutableMapOf<String, PlotDto>()
     private val publicHousesById = mutableMapOf<String, HousePublicDto>()
+    private val districtsById = mutableMapOf<String, DistrictDto>()
+    private val buildingsById = mutableMapOf<String, PublicBuildingDto>()
+    private val propsById = mutableMapOf<String, EnvironmentPropDto>()
+    private val lightsById = mutableMapOf<String, CityLightDto>()
+    private var builderTablesAvailable = false
     private var lastSnapshot: CityExplorerSnapshot? = null
 
     private var realtimeJob: Job? = null
@@ -55,6 +68,7 @@ class SupabaseCityExplorerRepository(
     private val stateFlow = MutableStateFlow<CityDataState<CityExplorerSnapshot>>(CityDataState.Loading)
 
     init {
+        lastSnapshot = snapshotCache?.loadSnapshot()
         scope.launch {
             loadInitialAndSubscribe()
         }
@@ -66,6 +80,33 @@ class SupabaseCityExplorerRepository(
         loadInitialAndSubscribe()
     }
 
+    override suspend fun submitHouseRequest(draft: HouseRequestDraft): HouseRequestSubmissionResult {
+        draft.validate()?.let { return HouseRequestSubmissionResult.Failure(it) }
+        config.validationErrorOrNull()?.let { return HouseRequestSubmissionResult.Failure(it) }
+        if (!connectivityChecker.isOnline()) {
+            return HouseRequestSubmissionResult.Failure("لا يوجد اتصال بالإنترنت. يرجى المحاولة عند عودة الاتصال.")
+        }
+        val client = clientProvider()
+            ?: return HouseRequestSubmissionResult.Failure("تعذر تهيئة اتصال Supabase.")
+        return try {
+            val params = buildJsonObject {
+                put("p_applicant_name", draft.applicantName.trim())
+                put("p_phone", draft.phone?.trim()?.takeIf { it.isNotEmpty() })
+                put("p_email", draft.email?.trim()?.takeIf { it.isNotEmpty() })
+                put("p_notes", draft.notes?.trim()?.takeIf { it.isNotEmpty() })
+            }
+            val result = client.postgrest.rpc("submit_house_request", params).decodeAs<RpcMutationResultDto>()
+            HouseRequestSubmissionResult.Success(
+                requestId = result.requestId ?: "submitted",
+                message = "تم إرسال طلب بناء المنزل بنجاح، وسيقوم رئيس المدينة بمراجعته وتخصيص الأرض المناسبة."
+            )
+        } catch (t: Throwable) {
+            HouseRequestSubmissionResult.Failure(
+                SupabaseErrorTranslator.toArabicMessage(t, "تعذر إرسال طلب بناء المنزل. حاول مرة أخرى.")
+            )
+        }
+    }
+
     private suspend fun loadInitialAndSubscribe() {
         val configError = config.validationErrorOrNull()
         if (configError != null) {
@@ -74,10 +115,9 @@ class SupabaseCityExplorerRepository(
         }
 
         if (!connectivityChecker.isOnline()) {
-            val stale = lastSnapshot
             stateFlow.value = CityDataState.Offline(
                 message = "لا يوجد اتصال بالإنترنت.",
-                staleData = stale
+                staleData = lastSnapshot
             )
             return
         }
@@ -101,12 +141,26 @@ class SupabaseCityExplorerRepository(
                 return
             }
 
+            // Optional City Builder tables (gracefully empty until SQL part_14..16 are applied)
+            var builderOk = true
+            val districts = runCatching { client.from("city_districts").select().decodeList<DistrictDto>() }
+                .getOrElse { builderOk = false; emptyList() }
+            val buildings = runCatching { client.from("city_buildings").select().decodeList<PublicBuildingDto>() }
+                .getOrElse { builderOk = false; emptyList() }
+            val props = runCatching { client.from("city_environment_props").select().decodeList<EnvironmentPropDto>() }
+                .getOrElse { builderOk = false; emptyList() }
+            val lights = runCatching { client.from("city_lights").select().decodeList<CityLightDto>() }
+                .getOrElse { builderOk = false; emptyList() }
+
             stateMutex.withLock {
+                builderTablesAvailable = builderOk
                 cachedLayout = layout
-                plotsById.clear()
-                plots.forEach { plotsById[it.id] = it }
-                publicHousesById.clear()
-                publicHouses.forEach { publicHousesById[it.houseId] = it }
+                plotsById.clear(); plots.forEach { plotsById[it.id] = it }
+                publicHousesById.clear(); publicHouses.forEach { publicHousesById[it.houseId] = it }
+                districtsById.clear(); districts.forEach { districtsById[it.id] = it }
+                buildingsById.clear(); buildings.forEach { buildingsById[it.id] = it }
+                propsById.clear(); props.forEach { propsById[it.id] = it }
+                lightsById.clear(); lights.forEach { lightsById[it.id] = it }
                 emitSnapshotLocked()
             }
 
@@ -138,35 +192,29 @@ class SupabaseCityExplorerRepository(
                     val channel = client.channel("explorer_city_realtime")
                     activeChannel = channel
 
-                    val houseChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                        table = "house_public_details"
-                    }
-                    val plotChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                        table = "plots"
-                    }
-                    val layoutChanges = channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                        table = "city_layout"
-                    }
-
-                    val collectorJobs = listOf(
-                        houseChanges
-                            .onEach { action -> handleHouseRealtimeAction(action) }
-                            .catch { /* handled by outer reconnect loop */ }
-                            .launchIn(this),
-                        plotChanges
-                            .onEach { action -> handlePlotRealtimeAction(action) }
-                            .catch { /* handled by outer reconnect loop */ }
-                            .launchIn(this),
-                        layoutChanges
-                            .onEach { action -> handleLayoutRealtimeAction(action) }
-                            .catch { /* handled by outer reconnect loop */ }
-                            .launchIn(this)
+                    val collectorJobs = mutableListOf(
+                        channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "house_public_details" }
+                            .onEach { handleHouseRealtimeAction(it) }.catch { }.launchIn(this),
+                        channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "plots" }
+                            .onEach { handlePlotRealtimeAction(it) }.catch { }.launchIn(this),
+                        channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "city_layout" }
+                            .onEach { handleLayoutRealtimeAction(it) }.catch { }.launchIn(this)
                     )
+
+                    if (builderTablesAvailable) {
+                        collectorJobs += channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "city_districts" }
+                            .onEach { handleBuilderMapRealtimeAction(districtsById, it) }.catch { }.launchIn(this)
+                        collectorJobs += channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "city_buildings" }
+                            .onEach { handleBuilderMapRealtimeAction(buildingsById, it) }.catch { }.launchIn(this)
+                        collectorJobs += channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "city_environment_props" }
+                            .onEach { handleBuilderMapRealtimeAction(propsById, it) }.catch { }.launchIn(this)
+                        collectorJobs += channel.postgresChangeFlow<PostgresAction>(schema = "public") { table = "city_lights" }
+                            .onEach { handleBuilderMapRealtimeAction(lightsById, it) }.catch { }.launchIn(this)
+                    }
 
                     channel.subscribe(blockUntilSubscribed = true)
                     backoffMs = 3_000L
 
-                    // If we recovered from an Offline state, re-emit fresh state
                     stateMutex.withLock {
                         if (stateFlow.value is CityDataState.Offline && cachedLayout != null) {
                             emitSnapshotLocked()
@@ -204,6 +252,29 @@ class SupabaseCityExplorerRepository(
         }
     }
 
+    private suspend inline fun <reified T : Any> handleBuilderMapRealtimeAction(
+        map: MutableMap<String, T>,
+        action: PostgresAction
+    ) {
+        stateMutex.withLock {
+            when (action) {
+                is PostgresAction.Insert -> {
+                    val dto = action.decodeRecord<T>()
+                    val id = action.record["id"]?.jsonPrimitive?.content ?: return
+                    map[id] = dto
+                }
+                is PostgresAction.Update -> {
+                    val dto = action.decodeRecord<T>()
+                    val id = action.record["id"]?.jsonPrimitive?.content ?: return
+                    map[id] = dto
+                }
+                is PostgresAction.Delete -> action.oldRecord["id"]?.jsonPrimitive?.content?.let { map.remove(it) }
+                else -> Unit
+            }
+            emitSnapshotLocked()
+        }
+    }
+
     internal suspend fun handleHouseRealtimeAction(action: PostgresAction) {
         stateMutex.withLock {
             when (action) {
@@ -217,9 +288,7 @@ class SupabaseCityExplorerRepository(
                 }
                 is PostgresAction.Delete -> {
                     val deletedId = action.oldRecord["house_id"]?.jsonPrimitive?.content
-                    if (deletedId != null) {
-                        publicHousesById.remove(deletedId)
-                    }
+                    if (deletedId != null) publicHousesById.remove(deletedId)
                 }
                 else -> Unit
             }
@@ -240,9 +309,7 @@ class SupabaseCityExplorerRepository(
                 }
                 is PostgresAction.Delete -> {
                     val deletedId = action.oldRecord["id"]?.jsonPrimitive?.content
-                    if (deletedId != null) {
-                        plotsById.remove(deletedId)
-                    }
+                    if (deletedId != null) plotsById.remove(deletedId)
                 }
                 else -> Unit
             }
@@ -262,9 +329,6 @@ class SupabaseCityExplorerRepository(
         }
     }
 
-    /**
-     * Applies an incremental house event directly in memory without querying the database again.
-     */
     internal suspend fun applyIncrementalHouseUpsert(dto: HousePublicDto) {
         stateMutex.withLock {
             publicHousesById[dto.houseId] = dto
@@ -289,14 +353,20 @@ class SupabaseCityExplorerRepository(
     internal suspend fun seedStateForTesting(
         layout: CityLayoutDto,
         plots: List<PlotDto>,
-        houses: List<HousePublicDto>
+        houses: List<HousePublicDto>,
+        districts: List<DistrictDto> = emptyList(),
+        buildings: List<PublicBuildingDto> = emptyList(),
+        props: List<EnvironmentPropDto> = emptyList(),
+        lights: List<CityLightDto> = emptyList()
     ) {
         stateMutex.withLock {
             cachedLayout = layout
-            plotsById.clear()
-            plots.forEach { plotsById[it.id] = it }
-            publicHousesById.clear()
-            houses.forEach { publicHousesById[it.houseId] = it }
+            plotsById.clear(); plots.forEach { plotsById[it.id] = it }
+            publicHousesById.clear(); houses.forEach { publicHousesById[it.houseId] = it }
+            districtsById.clear(); districts.forEach { districtsById[it.id] = it }
+            buildingsById.clear(); buildings.forEach { buildingsById[it.id] = it }
+            propsById.clear(); props.forEach { propsById[it.id] = it }
+            lightsById.clear(); lights.forEach { lightsById[it.id] = it }
             emitSnapshotLocked()
         }
     }
@@ -309,10 +379,25 @@ class SupabaseCityExplorerRepository(
         val snapshot = SupabaseMapper.buildExplorerSnapshot(
             layout = layout,
             plotDtos = plotsById.values.toList(),
-            publicHouses = publicHousesById.values.toList()
+            publicHouses = publicHousesById.values.toList(),
+            districts = districtsById.values.toList(),
+            buildings = buildingsById.values.toList(),
+            props = propsById.values.toList(),
+            lights = lightsById.values.toList()
         )
         lastSnapshot = snapshot
-        stateFlow.value = if (snapshot.scene.plots.isEmpty() && snapshot.scene.houses.isEmpty()) {
+        snapshotCache?.saveBundle(
+            CachedCitySnapshotBundle(
+                layout = layout,
+                plots = plotsById.values.toList(),
+                publicHouses = publicHousesById.values.toList(),
+                districts = districtsById.values.toList(),
+                buildings = buildingsById.values.toList(),
+                props = propsById.values.toList(),
+                lights = lightsById.values.toList()
+            )
+        )
+        stateFlow.value = if (snapshot.scene.plots.isEmpty() && snapshot.scene.houses.isEmpty() && snapshot.scene.publicBuildings.isEmpty()) {
             CityDataState.Empty
         } else {
             CityDataState.Success(snapshot)

@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Syria: Official Green/White/Black horizontal with three red 5-pointed stars -->
+    <path android:fillColor="#007A3D" android:pathData="M0,0 H120 V26.7 H0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M0,26.7 H120 V53.3 H0 Z" />
+    <path android:fillColor="#000000" android:pathData="M0,53.3 H120 V80 H0 Z" />
+    <!-- Left star at (30,40), Center at (60,40), Right at (90,40) R=8.5 -->
+    <path
+        android:fillColor="#CE1126"
+        android:pathData="M30,31.5 L31.9,37.4 L38.1,37.4 L33.1,41 L35,46.9 L30,43.2 L25,46.9 L26.9,41 L21.9,37.4 L28.1,37.4 Z" />
+    <path
+        android:fillColor="#CE1126"
+        android:pathData="M60,31.5 L61.9,37.4 L68.1,37.4 L63.1,41 L65,46.9 L60,43.2 L55,46.9 L56.9,41 L51.9,37.4 L58.1,37.4 Z" />
+    <path
+        android:fillColor="#CE1126"
+        android:pathData="M90,31.5 L91.9,37.4 L98.1,37.4 L93.1,41 L95,46.9 L90,43.2 L85,46.9 L86.9,41 L81.9,37.4 L88.1,37.4 Z" />
+</vector>

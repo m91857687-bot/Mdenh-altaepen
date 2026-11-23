@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Tunisia: Red field + White circle + Red crescent & 5-pointed star -->
+    <path android:fillColor="#E70013" android:pathData="M0,0 H120 V80 H0 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60,20 A20,20 0 1,0 60,60 A20,20 0 1,0 60,20 Z" />
+    <path
+        android:fillColor="#E70013"
+        android:pathData="M68.5,29.5 A13.5,13.5 0 1,0 68.5,50.5 A11.4,11.4 0 1,1 68.5,29.5 Z" />
+    <path
+        android:fillColor="#E70013"
+        android:pathData="M66.5,33.5 L68,38.1 L72.9,38.1 L69,40.9 L70.5,45.5 L66.5,42.7 L62.5,45.5 L64,40.9 L60.1,38.1 L65,38.1 Z" />
+</vector>

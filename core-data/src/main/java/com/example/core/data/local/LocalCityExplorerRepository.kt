@@ -22,12 +22,37 @@ class LocalCityExplorerRepository(
 ) : CityExplorerRepository {
 
     private val stateFlow = MutableStateFlow<CityDataState<CityExplorerSnapshot>>(buildSnapshotState())
+    private val submittedRequests = mutableListOf<com.example.core.data.model.HouseRequest>()
 
     override fun observeCitySnapshot(): Flow<CityDataState<CityExplorerSnapshot>> = stateFlow.asStateFlow()
 
     override suspend fun refresh() {
         stateFlow.value = buildSnapshotState()
     }
+
+    override suspend fun submitHouseRequest(
+        draft: com.example.core.data.model.HouseRequestDraft
+    ): com.example.core.data.model.HouseRequestSubmissionResult {
+        val validationError = draft.validate()
+        if (validationError != null) {
+            return com.example.core.data.model.HouseRequestSubmissionResult.Failure(validationError)
+        }
+        val reqId = "local_req_${submittedRequests.size + 1}"
+        submittedRequests += com.example.core.data.model.HouseRequest(
+            id = reqId,
+            applicantName = draft.applicantName.trim(),
+            phone = draft.phone?.trim()?.takeIf { it.isNotEmpty() },
+            email = draft.email?.trim()?.takeIf { it.isNotEmpty() },
+            notes = draft.notes?.trim()?.takeIf { it.isNotEmpty() },
+            status = com.example.core.data.model.HouseRequestStatus.NEW
+        )
+        return com.example.core.data.model.HouseRequestSubmissionResult.Success(
+            requestId = reqId,
+            message = "تم استلام طلب بناء المنزل بنجاح (وضع التجربة المحلية)."
+        )
+    }
+
+    fun getSubmittedRequestsForTesting(): List<com.example.core.data.model.HouseRequest> = submittedRequests.toList()
 
     private fun buildSnapshotState(): CityDataState<CityExplorerSnapshot> {
         return try {

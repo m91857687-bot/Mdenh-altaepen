@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="36dp"
+    android:height="24dp"
+    android:viewportWidth="120"
+    android:viewportHeight="80">
+    <!-- Egypt: Red/White/Black horizontal + Golden Eagle of Saladin -->
+    <path android:fillColor="#CE1126" android:pathData="M0,0 H120 V26.7 H0 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M0,26.7 H120 V53.3 H0 Z" />
+    <path android:fillColor="#000000" android:pathData="M0,53.3 H120 V80 H0 Z" />
+    <!-- Eagle of Saladin -->
+    <path
+        android:fillColor="#C09300"
+        android:pathData="M60,29 C61.5,29 63,30.2 63,31.5 L62,33 L70,32.5 L69,44 L65,45.5 L66,49 L62,48 L60,51 L58,48 L54,49 L55,45.5 L51,44 L50,32.5 L58,33 L57,31.5 C57,30.2 58.5,29 60,29 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M58,36 H62 V44 H58 Z" />
+</vector>

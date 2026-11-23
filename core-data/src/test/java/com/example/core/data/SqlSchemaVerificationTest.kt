@@ -97,4 +97,82 @@ class SqlSchemaVerificationTest {
         assertTrue(seedContent.contains("ON CONFLICT (id) DO NOTHING"))
         assertEquals(true, seedContent.contains("IF NOT EXISTS (SELECT 1 FROM public.houses LIMIT 1)"))
     }
+
+    @Test
+    fun `forward migrations part_14 through part_16 exist, stay under 500 lines, preserve data, and enforce RLS + is_admin`() {
+        val sqlDir = resolveSqlDir()
+        val forwardFiles = listOf(
+            "part_14_city_builder_schema.sql",
+            "part_15_city_builder_constraints_indexes.sql",
+            "part_16_city_builder_functions_rls_realtime.sql"
+        )
+        forwardFiles.forEach { fileName ->
+            val file = File(sqlDir, fileName)
+            assertTrue("Missing forward SQL migration $fileName", file.exists())
+            val lines = file.readLines()
+            assertTrue("$fileName has ${lines.size} lines (limit is 500)", lines.size <= 500)
+            val content = lines.joinToString("\n")
+            assertTrue("$fileName must never DROP TABLE existing data", !content.contains("DROP TABLE", ignoreCase = true))
+            assertTrue("$fileName must never TRUNCATE existing tables", !content.contains("TRUNCATE", ignoreCase = true))
+        }
+
+        val part16 = File(sqlDir, "part_16_city_builder_functions_rls_realtime.sql").readText()
+        val newTables = listOf("city_districts", "city_buildings", "city_environment_props", "city_lights")
+        newTables.forEach { table ->
+            assertTrue("RLS not enabled for $table", part16.contains("ALTER TABLE public.$table ENABLE ROW LEVEL SECURITY;"))
+            assertTrue("Admin policy missing for $table", part16.contains("${table}_admin_write"))
+        }
+        assertTrue(part16.contains("IF NOT public.is_admin() THEN"))
+        assertTrue(part16.contains("admin_expand_city_grid"))
+        assertTrue(part16.contains("admin_upsert_plot"))
+        assertTrue(part16.contains("admin_upsert_public_building"))
+        assertTrue(part16.contains("admin_set_lighting_phase"))
+
+        val readme = File(sqlDir, "README.md").readText()
+        forwardFiles.forEach { fileName ->
+            assertTrue("README.md should document $fileName", readme.contains(fileName))
+        }
+    }
+
+    @Test
+    fun `phase 3 forward migrations part_17 and part_18 exist, stay under 500 lines, preserve data, and secure RPCs`() {
+        val sqlDir = resolveSqlDir()
+        val phase3Files = listOf(
+            "part_17_phase3_house_requests_upgrade.sql",
+            "part_18_phase3_city_metadata_and_flags.sql"
+        )
+        phase3Files.forEach { fileName ->
+            val file = File(sqlDir, fileName)
+            assertTrue("Missing Phase 3 SQL migration $fileName", file.exists())
+            val lines = file.readLines()
+            assertTrue("$fileName has ${lines.size} lines (limit is 500)", lines.size <= 500)
+            val content = lines.joinToString("\n")
+            assertTrue("$fileName must never DROP TABLE existing data", !content.contains("DROP TABLE", ignoreCase = true))
+            assertTrue("$fileName must never TRUNCATE existing tables", !content.contains("TRUNCATE", ignoreCase = true))
+        }
+
+        val part17 = File(sqlDir, "part_17_phase3_house_requests_upgrade.sql").readText()
+        assertTrue(part17.contains("submit_house_request"))
+        assertTrue(part17.contains("admin_update_house_request_status"))
+        assertTrue(part17.contains("admin_assign_request_plot_and_house"))
+        assertTrue(part17.contains("GRANT EXECUTE ON FUNCTION public.submit_house_request"))
+        assertTrue(part17.contains("ALTER PUBLICATION supabase_realtime ADD TABLE public.house_requests"))
+        listOf("NEW", "UNDER_REVIEW", "APPROVED", "PREPARING_PLOT", "BUILDING_HOUSE", "COMPLETED", "REJECTED").forEach { status ->
+            assertTrue("Missing status $status in part_17", part17.contains("'$status'"))
+        }
+
+        val part18 = File(sqlDir, "part_18_phase3_city_metadata_and_flags.sql").readText()
+        assertTrue(part18.contains("description_ar"))
+        assertTrue(part18.contains("public_info_ar"))
+        assertTrue(part18.contains("house_title"))
+        assertTrue(part18.contains("public_status"))
+        assertTrue(part18.contains("allow_owner_name_public"))
+        assertTrue(part18.contains("admin_set_house_public_visibility"))
+        assertTrue(part18.contains("IF NOT public.is_admin() THEN"))
+
+        val readme = File(sqlDir, "README.md").readText()
+        phase3Files.forEach { fileName ->
+            assertTrue("README.md should document $fileName", readme.contains(fileName))
+        }
+    }
 }

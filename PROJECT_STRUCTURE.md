@@ -1,7 +1,7 @@
 # PROJECT_STRUCTURE — هيكل الملفات والوحدات
 
-## 1. البنية الحالية للمستودع (بعد المرحلة الرابعة)
-يضم المستودع تطبيقين مستقلين (`:app` للزوار/الاستكشاف و`:app-admin` للإدارة) يتشاركان مكتبتي النواة (`:core-city` و`:core-data`) مع طبقة Supabase المركزية في `:core-data`، ومخطط SQL المقسم في `supabase/sql/`، ومسار GitHub Actions لإنتاج ملفي APK مستقلين:
+## 1. البنية الحالية للمستودع (بعد المرحلة الثالثة: التكامل النهائي والدول الـ22 والطلبات)
+يضم المستودع تطبيقين مستقلين (`:app` للزوار/الاستكشاف و`:app-admin` للإدارة) يتشاركان مكتبتي النواة (`:core-city` و`:core-data`) مع طبقة Supabase المركزية في `:core-data`، ومخطط SQL المقسم (من `part_01` إلى `part_18`) في `supabase/sql/`، وملفات التعريب AR/EN، وجميع الملفات `< 500` سطر:
 
 ```text
 MadinatAlTayibin/
@@ -11,104 +11,64 @@ MadinatAlTayibin/
 │
 ├── supabase/sql/                               # مخطط قاعدة البيانات المقسم (< 500 سطر لكل ملف)
 │   ├── README.md                               # ترتيب التنفيذ والاستعلامات التحققية
-│   ├── part_01_extensions.sql                  # pgcrypto و set_updated_at()
-│   ├── part_02_profiles.sql                    # profiles + is_admin() (التحقق من role = 'ADMIN')
-│   ├── part_03_city_layout.sql                 # city_layout + plots
-│   ├── part_04_houses_and_privacy.sql          # houses + house_private_details + house_public_details
-│   ├── part_05_house_requests.sql              # house_requests
-│   ├── part_06_relationships_constraints.sql   # العلاقات + القيود الفريدة + التحقق المكاني في DB
-│   ├── part_07_indexes.sql                     # فهارس الأداء
-│   ├── part_08_functions.sql                   # مزامنة البيانات العامة + دوال admin_* الذرية
-│   ├── part_09_rls_policies.sql                # سياسات RLS على الجداول
-│   ├── part_10_realtime.sql                    # تفعيل REPLICA IDENTITY FULL و supabase_realtime
-│   ├── part_11_seed_data.sql                   # بيانات البذر الآمنة للـ 12 قطعة و12 بيتًا
-│   ├── part_12_device_auth_functions.sql       # دوال قديمة محفوظة في المستودع دون استخدام في التطبيق
-│   └── part_13_assign_owner_admin.sql          # سكربت ترقية حساب المالك إلى دور ADMIN في profiles
+│   ├── part_01_extensions.sql .. part_16_city_builder_functions_rls_realtime.sql
+│   ├── part_17_phase3_house_requests_upgrade.sql    # ترقية house_requests (7 حالات + RPC للزوار والإدارة + Realtime)
+│   └── part_18_phase3_city_metadata_and_flags.sql   # أوصاف المباني العامة + خصوصية اسم المالك وعناوين المنازل
 │
-├── core-city/                                  # وحدة المكتبة المشتركة لمحرك المدينة الأيزومتري
+├── core-city/                                  # وحدة المكتبة المشتركة لمحرك المدينة الأيزومتري الموسّع
 │   ├── build.gradle.kts
 │   └── src/
-│       ├── main/java/com/example/cityengine/
-│       │   ├── model/CityModels.kt
-│       │   ├── projection/IsoProjection.kt
-│       │   ├── camera/CameraController.kt
-│       │   ├── world/{PlotManager,SpatialValidator,StarterCityMap}.kt
-│       │   ├── render/{CityRenderer,RoadRenderer,HouseRenderer,TreeRenderer,FlagRenderer}.kt
-│       │   ├── CityEngine.kt
-│       │   └── ui/CityCanvas.kt
+│       ├── main/
+│       │   ├── res/drawable/asset_*.xml        # أصول VectorDrawable منظمة للمباني العامة والبيئة
+│       │   ├── res/drawable/flag_*.xml         # 22 علم دولة عربية رسمي (flag_sa .. flag_km)
+│       │   └── java/com/example/cityengine/
+│       │       ├── model/{CityModels,CityBuilderModels,ArabCountriesRegistry}.kt
+│       │       ├── assets/{CityAssetRegistry,CityAssetCache}.kt
+│       │       ├── performance/{SpatialIndex,ViewportCuller}.kt
+│       │       ├── projection/IsoProjection.kt
+│       │       ├── camera/CameraController.kt
+│       │       ├── world/{SpatialValidator,PlotManager,CityLayoutEditor,StarterCityMap}.kt
+│       │       ├── render/{CityRenderer,LightingRenderer,RoadRenderer,HouseRenderer,PublicBuildingRenderer,EnvironmentPropRenderer,TreeRenderer,FlagRenderer}.kt
+│       │       ├── CityEngine.kt
+│       │       └── ui/{CityCanvas,ArabFlagBadge}.kt
 │       └── test/java/com/example/cityengine/
-│           ├── IsoProjectionTest.kt
-│           ├── CameraControllerTest.kt
-│           ├── SpatialValidatorTest.kt
-│           ├── StarterCityMapTest.kt
-│           └── CityHitTestingTest.kt
+│           ├── {IsoProjectionTest,CameraControllerTest,SpatialValidatorTest,StarterCityMapTest,CityHitTestingTest,CityBuilderEngineTest,ArabCountriesRegistryTest}.kt
 │
 ├── core-data/                                  # وحدة البيانات المشتركة وطبقة Supabase المركزية
-│   ├── build.gradle.kts
+│   ├── consumer-rules.pro                      # قواعد ProGuard/R8 لحماية DTOs عند النشر
 │   └── src/
 │       ├── main/java/com/example/core/data/
-│       │   ├── model/{ExplorerModels,AdminModels}.kt
+│       │   ├── history/CityEditorHistoryManager.kt # إدارة التراجع/الإعادة الآمنة من التعارضات
+│       │   ├── model/{ExplorerModels,AdminModels,CityBuilderDataModels,HouseRequestModels}.kt
 │       │   ├── privacy/HousePrivacySanitizer.kt
 │       │   ├── repository/{CityExplorerRepository,CityAdminRepository}.kt
-│       │   ├── local/{LocalCityExplorerRepository,LocalCityAdminRepository}.kt
+│       │   ├── local/{LocalCityExplorerRepository,LocalCityAdminRepository,LocalCityBuilderDelegate,ExplorerSnapshotCache}.kt
 │       │   └── supabase/
-│       │       ├── SupabaseConfig.kt
-│       │       ├── SupabaseClientProvider.kt
-│       │       ├── SupabaseDto.kt
-│       │       ├── SupabaseMapper.kt
-│       │       ├── ConnectivityChecker.kt
-│       │       ├── SupabaseErrorTranslator.kt
-│       │       ├── SupabaseAdminAuthRepository.kt
-│       │       ├── SupabaseCityExplorerRepository.kt
-│       │       └── SupabaseCityAdminRepository.kt
+│       │       ├── {SupabaseConfig,SupabaseClientProvider,SupabaseDto,SupabaseMapper}.kt
+│       │       ├── {ConnectivityChecker,SupabaseErrorTranslator,AdminRpcPayloadBuilder}.kt
+│       │       ├── {SupabaseAdminAuthRepository,SupabaseCityExplorerRepository}.kt
+│       │       └── {SupabaseCityAdminRepository,SupabaseCityBuilderDelegate,SupabasePlotLayoutDelegate,SupabaseAdminRealtimeSync}.kt
 │       └── test/java/com/example/core/data/
-│           ├── HousePrivacySanitizerTest.kt
-│           ├── LocalCityExplorerRepositoryTest.kt
-│           ├── LocalCityAdminRepositoryTest.kt
-│           ├── SupabaseConfigTest.kt
-│           ├── SqlSchemaVerificationTest.kt
-│           ├── SupabaseRepositoriesTest.kt
-│           └── LiveSupabaseIntegrationTest.kt
+│           ├── {HousePrivacySanitizerTest,LocalCityExplorerRepositoryTest,LocalCityAdminRepositoryTest}.kt
+│           ├── {CityEditorHistoryManagerTest,SupabaseConfigTest,SqlSchemaVerificationTest,Phase3RequestsAndCacheTest}.kt
+│           └── {SupabaseRepositoriesTest,SupabaseAdminAuthRepositoriesTest,SupabaseCityBuilderTest,LiveSupabaseIntegrationTest}.kt
 │
-├── app/                                        # تطبيق الاستكشاف للزوار (app-explorer host)
-│   ├── build.gradle.kts                        # applicationId: com.aistudio.madinataltayibin.k7m2px
+├── app/                                        # تطبيق المشاهدة والاستكشاف للزوار (:app)
 │   └── src/
+│       ├── main/res/{values,values-en}/strings.xml
 │       ├── main/java/com/example/
-│       │   ├── explorer/{CityExplorerViewModel,CityExplorerScreen}.kt
-│       │   ├── ui/theme/{Color,Type,Theme}.kt
-│       │   └── MainActivity.kt                 # مرتبط بـ BuildConfig.SUPABASE_URL / ANON_KEY
-│       └── test/java/com/example/
-│           ├── CityExplorerViewModelTest.kt
-│           ├── ExampleRobolectricTest.kt
-│           └── ExampleUnitTest.kt
+│       │   ├── MainActivity.kt
+│       │   └── explorer/{CityExplorerViewModel,CityExplorerScreen,CityExplorerDetailCards,CityExplorerHouseCard,CityExplorerDialogs}.kt
+│       └── test/java/com/example/{ExampleUnitTest,CityExplorerViewModelTest,ExampleRobolectricTest}.kt
 │
-└── app-admin/                                  # تطبيق الإدارة المستقل الخاص بمالك المدينة
-    ├── build.gradle.kts                        # applicationId: com.aistudio.madinataltayibin.admin.m4p9qx
-    ├── proguard-rules.pro
+└── app-admin/                                  # تطبيق الإدارة المستقل (:app-admin)
     └── src/
-        ├── main/
-        │   ├── AndroidManifest.xml
-        │   ├── res/                            # أيقونة تكيفية خاصة، strings.xml (إدارة الطيبين)، خطوط محلية
-        │   └── java/com/example/admin/
-        │       ├── MainActivity.kt             # مرتبط بـ BuildConfig.SUPABASE_URL / ANON_KEY
-        │       ├── AdminViewModel.kt
-        │       └── ui/
-        │           ├── theme/{Color,Type,Theme}.kt
-        │           ├── AdminLoginScreen.kt
-        │           ├── AdminAppScreen.kt
-        │           ├── AdminDashboardScreen.kt
-        │           ├── AdminHousesScreen.kt
-        │           ├── AdminPlotsScreen.kt
-        │           ├── AdminMapScreen.kt
-        │           └── AdminHouseDialogs.kt
-        └── test/java/com/example/admin/
-            ├── AdminViewModelTest.kt
-            └── AdminRobolectricTest.kt
+        ├── main/res/{values,values-en}/strings.xml
+        ├── main/java/com/example/admin/
+        │   ├── {MainActivity,AdminViewModel,AdminEditorState,AdminEditorDelegate}.kt
+        │   └── ui/
+        │       ├── {AdminAppScreen,AdminLoginScreen,AdminDashboardScreen,AdminHousesScreen,AdminPlotsScreen,AdminRequestsScreen}.kt
+        │       ├── {AdminMapScreen,AdminMapEditorComponents,AdminMapInspectorCard}.kt
+        │       └── {AdminBuilderDialogs,AdminHouseDialogs,AdminHouseActionDialogs}.kt
+        └── test/java/com/example/admin/{AdminViewModelTest,AdminRobolectricTest,AdminBuilderRobolectricTest}.kt
 ```
-
----
-
-## 2. مخرجات البناء المستقلة
-- **تطبيق الاستكشاف (`:app`):** `app/build/outputs/apk/debug/app-debug.apk`
-- **تطبيق الإدارة (`:app-admin`):** `app-admin/build/outputs/apk/debug/app-admin-debug.apk`
-- **الاعتماديات:** تعتمد وحدتا `:app` و`:app-admin` على `project(":core-city")` و`project(":core-data")` بدون تكرار كود المحرك أو التحقق المكاني وبدون أي اعتمادات Firebase.
